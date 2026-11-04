@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>AkikazuHardwareCheck.Core</RootNamespace>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Localization\*.json" LogicalName="i18n.%(Filename).json" />
+    <EmbeddedResource Include="Reporting\Resources\*" LogicalName="report.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\..\third-party\pawnio\PawnIO_setup.exe" LogicalName="pawnio.setup.exe" />
+    <EmbeddedResource Include="..\..\licenses\*" LogicalName="license.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\..\THIRD-PARTY-NOTICES.md" LogicalName="license.THIRD-PARTY-NOTICES.md" />
+    <EmbeddedResource Include="..\..\LICENSE" LogicalName="license.LICENSE.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
+    <PackageReference Include="System.Management" Version="10.0.14" />
+    <PackageReference Include="Vortice.D3DCompiler" Version="3.8.3" />
+    <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
+    <PackageReference Include="Vortice.DXGI" Version="3.8.3" />
+  </ItemGroup>
+</Project>

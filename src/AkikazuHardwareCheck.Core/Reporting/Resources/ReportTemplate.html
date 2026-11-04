@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="{{lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{title}}</title>
+<style>{{style}}</style>
+</head>
+<body>
+<main class="sheet">
+  <header>
+    <h1>{{title}}</h1>
+    <address><strong>{{company}}</strong><br>{{companyContact}}</address>
+  </header>
+
+  <div class="columns">
+    <section>
+      <h2>{{hardwareHeading}}</h2>
+      <table class="pairs">{{hardwareRows}}</table>
+    </section>
+    <section>
+      <h2>{{temperatureHeading}}</h2>
+      {{temperatureTable}}
+      <h2>{{testHeading}}</h2>
+      <table class="pairs">{{testRows}}</table>
+    </section>
+  </div>
+
+  <section class="conclusion">
+    <strong>{{conclusion}}</strong>
+    <p>{{disclaimer}}</p>
+  </section>
+
+  <footer>{{footer}}</footer>
+</main>
+</body>
+</html>

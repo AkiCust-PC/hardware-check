@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AkikazuHardwareCheck.App/AkikazuHardwareCheck.App.csproj" />
+    <Project Path="src/AkikazuHardwareCheck.Core/AkikazuHardwareCheck.Core.csproj" />
+    <Project Path="src/AkikazuHardwareCheck.Probe/AkikazuHardwareCheck.Probe.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AkikazuHardwareCheck.Core.Tests/AkikazuHardwareCheck.Core.Tests.csproj" />
+  </Folder>
+</Solution>

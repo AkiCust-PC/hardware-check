@@ -1,0 +1,33 @@
+@page { size: A4; margin: 12mm; }
+:root { color-scheme: light; --ink: #1c2430; --muted: #5d6b7c; --line: #cfd6df; --soft: #f3f5f8; --alert: #b3261e; }
+* { box-sizing: border-box; }
+html { background: #e8ebef; }
+body { margin: 0; color: var(--ink); font: 9.5pt/1.4 "Yu Gothic UI", "Meiryo", "Microsoft YaHei UI", "Microsoft JhengHei UI", "Segoe UI", sans-serif; }
+.sheet { width: 186mm; min-height: 273mm; margin: 8mm auto; padding: 0; background: #fff; display: flex; flex-direction: column; gap: 3mm; }
+header { display: flex; justify-content: space-between; gap: 6mm; border-bottom: 0.6mm solid var(--ink); padding-bottom: 2.5mm; }
+h1 { margin: 0 0 1.5mm; font-size: 16pt; letter-spacing: 0.02em; }
+h2 { margin: 2.5mm 0 1mm; font-size: 9.5pt; color: var(--ink); border-left: 0.8mm solid var(--ink); padding-left: 1.5mm; }
+section h2:first-child { margin-top: 0; }
+address { font-style: normal; font-size: 8pt; text-align: right; color: var(--muted); white-space: nowrap; }
+address strong { color: var(--ink); font-size: 9.5pt; }
+.columns { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
+table { width: 100%; border-collapse: collapse; }
+td, th { padding: 0.7mm 1.2mm; border-bottom: 0.2mm solid var(--line); text-align: left; vertical-align: top; overflow-wrap: anywhere; font-size: 8.5pt; }
+th { background: var(--soft); font-weight: 600; }
+.pairs td:first-child { width: 34%; color: var(--muted); }
+.data td:nth-child(n+3), .data th:nth-child(n+3) { text-align: right; white-space: nowrap; }
+.muted { color: var(--muted); text-align: left !important; }
+.alert { color: var(--alert); font-weight: 600; }
+.conclusion { background: var(--soft); padding: 2mm 3mm; border-radius: 1mm; break-inside: avoid; }
+.conclusion strong { font-size: 10.5pt; }
+.conclusion p { margin: 0.5mm 0 0; font-size: 8.5pt; color: var(--muted); }
+footer { margin-top: auto; font-size: 7pt; color: var(--muted); text-align: right; }
+@media print {
+  html { background: #fff; }
+  .sheet { margin: 0; min-height: 272mm; }
+}
+@media screen and (max-width: 720px) {
+  .sheet { width: auto; min-height: 0; margin: 0; padding: 16px; }
+  header, .columns { display: block; }
+  address { text-align: left; white-space: normal; margin-top: 8px; }
+}
