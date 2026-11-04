@@ -34,6 +34,9 @@ internal sealed class MainForm : Form
     // Without the graphics card selector row.
     private const int CONTROL_SECTION_COMPACT_HEIGHT = 162;
     private const int CLOCK_INTERVAL_MS = 1000;
+
+    // shutdown.exe returns at once after scheduling the restart, so this only waits for it to report a refusal.
+    private const int FIRMWARE_RESTART_WAIT_MS = 5000;
     private const int WM_COMMAND = 0x0111;
     private const int MENU_ID_MASK = 0xFFFF;
     private const int PRIMARY_BUTTON_HEIGHT = 36;
@@ -415,6 +418,7 @@ internal sealed class MainForm : Form
         NativeMenu.AddItem(file, MenuCommand.OpenReport, _t["ui.openReport"]);
         NativeMenu.AddItem(file, MenuCommand.OpenFolder, _t["ui.openFolder"]);
         NativeMenu.AddSeparator(file);
+        NativeMenu.AddItem(file, MenuCommand.RestartToFirmware, _t["ui.restartToFirmware"]);
         NativeMenu.AddItem(file, MenuCommand.Settings, _t["ui.settings"]);
 
         var language = menu.AddSubmenu(_t["ui.menuLanguage"]);
@@ -451,9 +455,37 @@ internal sealed class MainForm : Form
             case MenuCommand.OpenFolder:
                 OpenReportFolder();
                 break;
+            case MenuCommand.RestartToFirmware:
+                RestartToFirmware();
+                break;
             case MenuCommand.Settings:
                 OpenSettingsForm();
                 break;
+        }
+    }
+
+    /// <summary>
+    /// Secure Boot can only be switched inside the firmware: Windows has no general interface to turn it on, by design.
+    /// This is the closest thing to one click, so it restarts straight into the firmware screen after showing what to change.
+    /// </summary>
+    private void RestartToFirmware()
+    {
+        if (MessageBox.Show(this, _t["ui.restartToFirmwareConfirm"], _t["ui.restartToFirmware"], MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo("shutdown.exe", "/r /fw /t 0") { UseShellExecute = false, CreateNoWindow = true });
+            if (process is not null && process.WaitForExit(FIRMWARE_RESTART_WAIT_MS) && process.ExitCode != 0)
+            {
+                SetStatus(_t["ui.restartToFirmwareFailed", process.ExitCode], isAlert: true);
+            }
+        }
+        catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
+        {
+            SetStatus(_t["ui.openFailed", exception.Message], isAlert: true);
         }
     }
 
@@ -995,6 +1027,9 @@ internal sealed class MainForm : Form
             menu.SetEnabled(MenuCommand.Copy, isReady);
             menu.SetEnabled(MenuCommand.OpenReport, _lastReport is not null);
             menu.SetEnabled(MenuCommand.Settings, !isRunning);
+
+            // Only a PC that booted through UEFI with Secure Boot off has anything to change there.
+            menu.SetEnabled(MenuCommand.RestartToFirmware, !isRunning && _hardware?.Security?.SecureBootEnabled == false);
             for (var index = 0; index < LanguageChoices.Length; index++)
             {
                 menu.SetEnabled(MenuCommand.FirstLanguage + index, !isRunning);

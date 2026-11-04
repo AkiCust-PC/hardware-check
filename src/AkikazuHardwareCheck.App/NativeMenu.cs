@@ -9,6 +9,7 @@ internal enum MenuCommand
     OpenReport,
     OpenFolder,
     Settings,
+    RestartToFirmware,
     FirstLanguage = 100,
 }
 
