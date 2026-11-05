@@ -10,6 +10,12 @@ internal enum MenuCommand
     OpenFolder,
     Settings,
     RestartToFirmware,
+    BackgroundColor,
+    BackgroundImage,
+    BackgroundRotate,
+    BackgroundMirrorHorizontal,
+    BackgroundMirrorVertical,
+    BackgroundReset,
     FirstLanguage = 100,
 }
 

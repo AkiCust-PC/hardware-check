@@ -22,4 +22,11 @@
   <ItemGroup>
     <ProjectReference Include="..\AkikazuHardwareCheck.Core\AkikazuHardwareCheck.Core.csproj" />
   </ItemGroup>
+  <!-- Debugger and crash-dump parts of the runtime, the WinForms designer, and a Linux-only helper of a dependency.
+       A running copy of this program loads none of them. Only the published package changes, not debug builds. -->
+  <Target Name="RemoveUnusedRuntimeFiles" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(Filename)', '^(mscordaccore.*|mscordbi|createdump|Microsoft\.DiaSymReader\.Native\..*|System\.Windows\.Forms\.Design(\.Editors)?|libMonoPosixHelper)$'))" />
+    </ItemGroup>
+  </Target>
 </Project>

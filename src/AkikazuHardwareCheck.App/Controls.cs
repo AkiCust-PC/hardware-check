@@ -42,7 +42,7 @@ internal sealed class InfoView : Panel
         {
             var row = rows[index];
             _table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            var label = Cell(row.Label, row.Color ?? SystemColors.GrayText);
+            var label = Cell(row.Label, row.Color ?? Ui.MutedTextColor);
             _table.Controls.Add(label, 0, index);
             if (row.IsHeader)
             {
@@ -93,7 +93,7 @@ internal sealed class MetricTile : TableLayoutPanel
     private const nint PBST_ERROR = 2;
     private const nint PBST_PAUSED = 3;
 
-    private readonly Label _caption = new() { AutoSize = true, ForeColor = SystemColors.GrayText, Margin = new Padding(0) };
+    private readonly Label _caption = new() { AutoSize = true, Margin = new Padding(0) };
     private readonly Label _value = new() { AutoSize = true, Text = "—", Margin = new Padding(0, 0, 0, Ui.SPACING / 2) };
     private readonly ProgressBar _bar = new() { Maximum = Ui.PERCENT_MAX, Dock = DockStyle.Top, Margin = new Padding(0), Visible = false };
 
@@ -116,6 +116,7 @@ internal sealed class MetricTile : TableLayoutPanel
     public void SetCaption(string caption)
     {
         _caption.Text = caption;
+        _caption.ForeColor = Ui.MutedTextColor;
         _value.Font = new Font(Font.FontFamily, VALUE_FONT_SIZE, FontStyle.Bold);
     }
 

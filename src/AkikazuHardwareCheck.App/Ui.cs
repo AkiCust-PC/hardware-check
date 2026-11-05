@@ -24,6 +24,11 @@ internal static class Ui
 
     public static Color SuccessColor => Application.IsDarkModeEnabled ? Color.FromArgb(108, 203, 95) : Color.FromArgb(27, 110, 60);
 
+    /// <summary>Set while the window has a chosen color or picture, where the dim system text color may be unreadable.</summary>
+    public static bool HasCustomBackground { get; set; }
+
+    public static Color MutedTextColor => HasCustomBackground ? SystemColors.ControlText : SystemColors.GrayText;
+
     /// <summary>Reads the icon built into the executable, so every window matches it. Single-file builds keep it there too.</summary>
     public static Icon? AppIcon { get; } = Environment.ProcessPath is { } path ? Icon.ExtractAssociatedIcon(path) : null;
 

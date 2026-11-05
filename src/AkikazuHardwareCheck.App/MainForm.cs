@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -34,6 +35,9 @@ internal sealed class MainForm : Form
     // Without the graphics card selector row.
     private const int CONTROL_SECTION_COMPACT_HEIGHT = 162;
     private const int CLOCK_INTERVAL_MS = 1000;
+
+    // A 48-megapixel photo takes about 190 MB once decoded. A 4K screen never shows more than this many pixels per side.
+    private const int MAX_BACKGROUND_SIDE_PIXELS = 3840;
 
     // shutdown.exe returns at once after scheduling the restart, so this only waits for it to report a refusal.
     private const int FIRMWARE_RESTART_WAIT_MS = 5000;
@@ -82,6 +86,10 @@ internal sealed class MainForm : Form
     private readonly Label _statusLabel = Ui.Label();
 
     private readonly System.Windows.Forms.Timer _clockTimer = new() { Interval = CLOCK_INTERVAL_MS };
+    private TableLayoutPanel? _rootPanel;
+    private Bitmap? _backgroundSource;
+    private Size _backgroundSize;
+    private bool _isResizing;
     private NativeMenu? _menu;
     private GroupBox? _hardwareGroup;
     private GroupBox? _monitorGroup;
@@ -119,13 +127,14 @@ internal sealed class MainForm : Form
 
         Icon = Ui.AppIcon;
         KeyPreview = true;
+        DoubleBuffered = true;
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(LogicalToDeviceUnits(1180), LogicalToDeviceUnits(800));
         MinimumSize = new Size(LogicalToDeviceUnits(900), LogicalToDeviceUnits(720));
 
         WireEvents();
+        ApplyBackground();
         ApplyLanguage();
-        UpdateCommandStates();
     }
 
     private bool IsTestRunning => _testStop is not null;
@@ -210,6 +219,7 @@ internal sealed class MainForm : Form
         }
 
         _clockTimer.Dispose();
+        _backgroundSource?.Dispose();
         StopLiveMonitor();
         _activityMonitor?.Dispose();
         _sensorSource?.Dispose();
@@ -246,6 +256,7 @@ internal sealed class MainForm : Form
         root.Controls.Add(BuildNotice(), 0, 0);
         root.Controls.Add(BuildBody(), 0, 1);
         root.Controls.Add(BuildFooter(), 0, 2);
+        _rootPanel = root;
         return root;
     }
 
@@ -404,7 +415,22 @@ internal sealed class MainForm : Form
         _diskTestButton.Click += (_, _) => _ = RunDiskTestAsync();
         _speakerTestButton.Click += (_, _) => _ = RunSpeakerTestAsync();
         _micTestButton.Click += (_, _) => _ = RunMicrophoneTestAsync();
-        Resize += (_, _) => FitMessages();
+        Resize += (_, _) =>
+        {
+            FitMessages();
+            if (!_isResizing)
+            {
+                RenderBackground();
+            }
+        };
+
+        // Dragging the window edge fires a resize for every pixel, so the picture is redrawn once at the end.
+        ResizeBegin += (_, _) => _isResizing = true;
+        ResizeEnd += (_, _) =>
+        {
+            _isResizing = false;
+            RenderBackground();
+        };
         _clockTimer.Tick += (_, _) => _hardwareList.UpdateValue(_t["summary.time"], HardwareSummary.TimeText(DateTimeOffset.Now, TimeZoneInfo.Local));
     }
 
@@ -444,6 +470,16 @@ internal sealed class MainForm : Form
         NativeMenu.AddItem(file, MenuCommand.RestartToFirmware, _t["ui.restartToFirmware"]);
         NativeMenu.AddItem(file, MenuCommand.Settings, _t["ui.settings"]);
 
+        var view = menu.AddSubmenu(_t["ui.menuView"]);
+        NativeMenu.AddItem(view, MenuCommand.BackgroundColor, _t["ui.backgroundColor"]);
+        NativeMenu.AddItem(view, MenuCommand.BackgroundImage, _t["ui.backgroundImage"]);
+        NativeMenu.AddSeparator(view);
+        NativeMenu.AddItem(view, MenuCommand.BackgroundRotate, _t["ui.backgroundRotate"]);
+        NativeMenu.AddItem(view, MenuCommand.BackgroundMirrorHorizontal, _t["ui.backgroundMirrorH"]);
+        NativeMenu.AddItem(view, MenuCommand.BackgroundMirrorVertical, _t["ui.backgroundMirrorV"]);
+        NativeMenu.AddSeparator(view);
+        NativeMenu.AddItem(view, MenuCommand.BackgroundReset, _t["ui.backgroundReset"]);
+
         var language = menu.AddSubmenu(_t["ui.menuLanguage"]);
         for (var index = 0; index < LanguageChoices.Length; index++)
         {
@@ -481,6 +517,24 @@ internal sealed class MainForm : Form
             case MenuCommand.RestartToFirmware:
                 RestartToFirmware();
                 break;
+            case MenuCommand.BackgroundColor:
+                ChooseBackgroundColor();
+                break;
+            case MenuCommand.BackgroundImage:
+                ChooseBackgroundImage();
+                break;
+            case MenuCommand.BackgroundRotate:
+                ChangeBackgroundTransform(transform => transform.RotateClockwise());
+                break;
+            case MenuCommand.BackgroundMirrorHorizontal:
+                ChangeBackgroundTransform(transform => transform.MirrorHorizontally());
+                break;
+            case MenuCommand.BackgroundMirrorVertical:
+                ChangeBackgroundTransform(transform => transform.MirrorVertically());
+                break;
+            case MenuCommand.BackgroundReset:
+                ChangeBackground(_settings with { BackgroundColorArgb = null, BackgroundImagePath = null, BackgroundRotationDegrees = 0, IsBackgroundMirrored = false });
+                break;
             case MenuCommand.Settings:
                 OpenSettingsForm();
                 break;
@@ -510,6 +564,127 @@ internal sealed class MainForm : Form
         {
             SetStatus(_t["ui.openFailed", exception.Message], isAlert: true);
         }
+    }
+
+    private void ChangeBackground(AppSettings settings)
+    {
+        SaveSettings(settings);
+        ApplyBackground();
+
+        // Rebuilds the lists and captions in the text color that suits the new background.
+        ApplyLanguage();
+    }
+
+    private void ApplyBackground()
+    {
+        Ui.HasCustomBackground = _settings.BackgroundColorArgb is not null || _settings.BackgroundImagePath is not null;
+        BackColor = _settings.BackgroundColorArgb is { } color ? Color.FromArgb(color) : SystemColors.Window;
+        _backgroundSource?.Dispose();
+        _backgroundSource = null;
+        if (_settings.BackgroundImagePath is { } path)
+        {
+            try
+            {
+                // Copied so the file is not kept locked while the tool runs.
+                using var file = new Bitmap(path);
+                var scale = Math.Min(1, MAX_BACKGROUND_SIDE_PIXELS / (double)Math.Max(file.Width, file.Height));
+                _backgroundSource = new Bitmap(file, (int)Math.Max(1, file.Width * scale), (int)Math.Max(1, file.Height * scale));
+            }
+            catch (Exception exception) when (exception is ArgumentException or IOException or UnauthorizedAccessException or OutOfMemoryException or ExternalException)
+            {
+                SetStatus(_t["ui.backgroundLoadFailed", exception.Message], isAlert: true);
+            }
+        }
+
+        _backgroundSize = Size.Empty;
+        RenderBackground();
+    }
+
+    /// <summary>Scales the picture to the window with Windows' image library. Panels turn transparent so it shows through; system buttons stay as they are.</summary>
+    private void RenderBackground()
+    {
+        if (_backgroundSource is not { } source)
+        {
+            var previous = BackgroundImage;
+            BackgroundImage = null;
+            previous?.Dispose();
+            if (_rootPanel is { } panel)
+            {
+                panel.BackColor = Color.Empty;
+            }
+
+            return;
+        }
+
+        var area = ClientSize;
+        if (area.IsEmpty || area == _backgroundSize)
+        {
+            return;
+        }
+
+        using var turned = (Bitmap)source.Clone();
+        turned.RotateFlip(ToRotateFlip(new BackgroundTransform(_settings.BackgroundRotationDegrees, _settings.IsBackgroundMirrored)));
+        var fit = BackgroundTransform.Cover(turned.Width, turned.Height, area.Width, area.Height);
+        var frame = new Bitmap(area.Width, area.Height);
+        using (var graphics = Graphics.FromImage(frame))
+        {
+            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            graphics.DrawImage(turned, fit.X, fit.Y, fit.Width, fit.Height);
+        }
+
+        var replaced = BackgroundImage;
+        BackgroundImageLayout = ImageLayout.None;
+        BackgroundImage = frame;
+        replaced?.Dispose();
+        _backgroundSize = area;
+        if (_rootPanel is { } root)
+        {
+            root.BackColor = Color.Transparent;
+        }
+    }
+
+    private static RotateFlipType ToRotateFlip(BackgroundTransform transform) => (transform.RotationDegrees, transform.IsMirrored) switch
+    {
+        (90, false) => RotateFlipType.Rotate90FlipNone,
+        (180, false) => RotateFlipType.Rotate180FlipNone,
+        (270, false) => RotateFlipType.Rotate270FlipNone,
+        (0, true) => RotateFlipType.RotateNoneFlipX,
+        (90, true) => RotateFlipType.Rotate90FlipX,
+        (180, true) => RotateFlipType.Rotate180FlipX,
+        (270, true) => RotateFlipType.Rotate270FlipX,
+        _ => RotateFlipType.RotateNoneFlipNone,
+    };
+
+    private void ChooseBackgroundColor()
+    {
+        using var dialog = new ColorDialog { Color = BackColor, FullOpen = true };
+        if (dialog.ShowDialog(this) == DialogResult.OK)
+        {
+            // A color replaces the picture, which would otherwise hide it completely.
+            ChangeBackground(_settings with { BackgroundColorArgb = dialog.Color.ToArgb(), BackgroundImagePath = null, BackgroundRotationDegrees = 0, IsBackgroundMirrored = false });
+        }
+    }
+
+    private void ChooseBackgroundImage()
+    {
+        using var dialog = new OpenFileDialog { Filter = _t["ui.backgroundFilter"], Title = _t["ui.backgroundImage"].TrimEnd('…') };
+        if (dialog.ShowDialog(this) == DialogResult.OK)
+        {
+            ChangeBackground(_settings with { BackgroundImagePath = dialog.FileName, BackgroundRotationDegrees = 0, IsBackgroundMirrored = false });
+        }
+    }
+
+    private void ChangeBackgroundTransform(Func<BackgroundTransform, BackgroundTransform> change)
+    {
+        if (_backgroundSource is null)
+        {
+            return;
+        }
+
+        var changed = change(new BackgroundTransform(_settings.BackgroundRotationDegrees, _settings.IsBackgroundMirrored));
+        SaveSettings(_settings with { BackgroundRotationDegrees = changed.RotationDegrees, IsBackgroundMirrored = changed.IsMirrored });
+        _backgroundSize = Size.Empty;
+        RenderBackground();
     }
 
     private void OnLanguageChosen(string code)
@@ -1074,6 +1249,10 @@ internal sealed class MainForm : Form
             menu.SetEnabled(MenuCommand.Copy, isReady);
             menu.SetEnabled(MenuCommand.OpenReport, _lastReport is not null);
             menu.SetEnabled(MenuCommand.Settings, !isRunning);
+            var hasPicture = _backgroundSource is not null;
+            menu.SetEnabled(MenuCommand.BackgroundRotate, hasPicture);
+            menu.SetEnabled(MenuCommand.BackgroundMirrorHorizontal, hasPicture);
+            menu.SetEnabled(MenuCommand.BackgroundMirrorVertical, hasPicture);
 
             // Only a PC that booted through UEFI with Secure Boot off has anything to change there.
             menu.SetEnabled(MenuCommand.RestartToFirmware, !isRunning && _hardware?.Security?.SecureBootEnabled == false);

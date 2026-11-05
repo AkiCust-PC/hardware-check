@@ -37,7 +37,7 @@
 ## 发布
 
 - [ ] 确认 `Directory.Build.props` 的版本号
-- [ ] 运行 `scripts/publish.ps1`
+- [ ] 运行 `scripts/publish.ps1`，确认体积没有异常增长（v0.1.2：程序 55.6 MB，压缩包 49.4 MB）
 - [ ] 创建独立仓库，在 GitHub Release 上传 `AkikazuHardwareCheck-win-x64.zip`（需要单独授权）
 - [ ] 在网站仓库的 `app/data/tools/hardware-check-release.json` 填入 `url`、`sha256`、`version`。`url` 为 `https://github.com/<owner>/<repo>/releases/latest/download/AkikazuHardwareCheck-win-x64.zip`，`sha256` 取 zip 的值。`url` 为空时网站下载按钮保持禁用
 - [ ] 每次发新版都同步上述 `sha256` 和 `version`：`latest` 链接会自动指向新版，网页上的版本和校验值不会

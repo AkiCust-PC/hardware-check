@@ -11,6 +11,10 @@ namespace AkikazuHardwareCheck.Core.Configuration;
 /// <param name="CpuProtectionCelsius">CPU temperature limit.</param>
 /// <param name="GpuProtectionCelsius">GPU temperature limit.</param>
 /// <param name="IsModelsOnlyView">Whether the hardware list shows only hardware models and parameters.</param>
+/// <param name="BackgroundColorArgb">The chosen window color. Null uses the system window color.</param>
+/// <param name="BackgroundImagePath">The chosen background picture. Null shows no picture.</param>
+/// <param name="BackgroundRotationDegrees">Clockwise rotation of the picture.</param>
+/// <param name="IsBackgroundMirrored">Whether the picture is mirrored left to right after rotating.</param>
 public sealed record AppSettings(
     string? Language = null,
     string? ReportFolder = null,
@@ -18,7 +22,11 @@ public sealed record AppSettings(
     double? CpuStressSeconds = null,
     double? CpuProtectionCelsius = null,
     double? GpuProtectionCelsius = null,
-    bool IsModelsOnlyView = false)
+    bool IsModelsOnlyView = false,
+    int? BackgroundColorArgb = null,
+    string? BackgroundImagePath = null,
+    int BackgroundRotationDegrees = 0,
+    bool IsBackgroundMirrored = false)
 {
     private const string FOLDER_NAME = "AkikazuHardwareCheck";
 
