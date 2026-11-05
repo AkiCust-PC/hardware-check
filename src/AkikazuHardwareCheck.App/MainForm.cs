@@ -222,6 +222,8 @@ internal sealed class MainForm : Form
         base.OnFormClosing(e);
     }
 
+    private static string? Number(double? value) => value?.ToString("0.#", CultureInfo.InvariantCulture);
+
     private static string Format(double? value, string format, string unit) =>
         value is { } number ? $"{number.ToString(format, CultureInfo.InvariantCulture)} {unit}" : "—";
 
@@ -1130,7 +1132,7 @@ internal sealed class MainForm : Form
 
     private string TemperatureText(TemperatureRow row) => row.State switch
     {
-        TemperatureRowState.Measured => _t["test.statistics", $"{row.Minimum:0.#}", $"{row.Maximum:0.#}", $"{row.Average:0.#}", row.ValidSamples],
+        TemperatureRowState.Measured => _t["test.statistics", Number(row.Minimum), Number(row.Maximum), Number(row.Average), row.ValidSamples],
         _ => _t["status.insufficientData"],
     };
 
@@ -1148,7 +1150,7 @@ internal sealed class MainForm : Form
         text.AppendLine();
         foreach (var phase in run.Phases)
         {
-            var load = phase.AverageLoadPercent is { } value ? $"{value:0} %" : _t["common.unavailable"];
+            var load = phase.AverageLoadPercent is { } value ? $"{value.ToString("0", CultureInfo.InvariantCulture)} %" : _t["common.unavailable"];
             text.AppendLine(CultureInfo.InvariantCulture, $"{EnumText.Phase(_t, phase.Phase)}: {EnumText.Status(_t, phase.Status)} | {phase.ActualSeconds:0}/{phase.PlannedSeconds:0} s | {_t["ui.cpuLoadShort"]} {load}");
         }
 
@@ -1157,7 +1159,7 @@ internal sealed class MainForm : Form
         {
             var values = item.Average is null
                 ? _t["common.unavailable"]
-                : _t["test.statistics", $"{item.Minimum:0.#}", $"{item.Maximum:0.#}", $"{item.Average:0.#}", item.ValidSamples];
+                : _t["test.statistics", Number(item.Minimum), Number(item.Maximum), Number(item.Average), item.ValidSamples];
             text.AppendLine(CultureInfo.InvariantCulture, $"{EnumText.Phase(_t, item.Phase)} | {item.HardwareName} / {item.SensorName}: {values}");
         }
 

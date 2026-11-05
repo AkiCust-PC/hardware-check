@@ -2,6 +2,8 @@ namespace AkikazuHardwareCheck.Core.Hardware;
 
 public static class HardwareText
 {
+    private const char REPLACEMENT_CHARACTER = (char)0xFFFD;
+
     // Placeholder strings that firmware vendors leave in SMBIOS fields: these mean "not provided".
     private static readonly HashSet<string> Placeholders = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -17,7 +19,8 @@ public static class HardwareText
 
     public static string? Clean(string? value)
     {
-        var trimmed = value?.Trim();
+        // Firmware strings can hold bytes that decode to nothing readable, which would show as garbled text.
+        var trimmed = value is null ? null : new string(value.Where(character => !char.IsControl(character) && character != REPLACEMENT_CHARACTER).ToArray()).Trim();
         return string.IsNullOrEmpty(trimmed) || Placeholders.Contains(trimmed) ? null : trimmed;
     }
 

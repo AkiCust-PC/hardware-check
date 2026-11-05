@@ -127,7 +127,7 @@ public sealed class TestController(
         var isBusy = cpuLoad.Average > IDLE_MAX_CPU_LOAD_PERCENT;
         if (isBusy)
         {
-            AddAnomaly(AnomalyCode.IdleConditionNotMet, TestPhase.Idle, $"{cpuLoad.Average:0.#} %");
+            AddAnomaly(AnomalyCode.IdleConditionNotMet, TestPhase.Idle, FormattableString.Invariant($"{cpuLoad.Average:0.#} %"));
         }
 
         if (!hasTemperature && !isStopped)
@@ -255,7 +255,7 @@ public sealed class TestController(
         {
             if (isLoadKnown && !isLoadSufficient)
             {
-                AddAnomaly(AnomalyCode.LoadBelowTarget, stress.Phase, $"{loadAverage:0.#} %");
+                AddAnomaly(AnomalyCode.LoadBelowTarget, stress.Phase, FormattableString.Invariant($"{loadAverage:0.#} %"));
             }
 
             if (!isLoadKnown)
@@ -295,7 +295,7 @@ public sealed class TestController(
     {
         if (protection.WasOverheated)
         {
-            AddAnomaly(AnomalyCode.TemperatureProtection, stress.Phase, $"{protection.TriggerValue:0.#} °C");
+            AddAnomaly(AnomalyCode.TemperatureProtection, stress.Phase, FormattableString.Invariant($"{protection.TriggerValue:0.#} °C"));
         }
 
         if (protection.WasSensorLost)

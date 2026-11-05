@@ -59,7 +59,7 @@ public class EncodingTests
     [Fact]
     public void SavedFilesAreUtf8AndReadBackUnchanged()
     {
-        var folder = Path.Combine(AppContext.BaseDirectory, $"test-output-{Guid.NewGuid():N}");
+        var folder = Path.Combine(AppContext.BaseDirectory, $"test-output テスト 测试 테스트 {Guid.NewGuid():N}");
         try
         {
             var saved = ReportStore.Save(Report(), folder, Translator.Load(AppLanguage.JAPANESE));

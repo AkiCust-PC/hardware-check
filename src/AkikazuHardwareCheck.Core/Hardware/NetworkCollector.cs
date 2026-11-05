@@ -16,7 +16,7 @@ public static class NetworkCollector
         "Hyper-V", "Virtual", "VMware", "VirtualBox", "TAP-", "WAN Miniport", "Bluetooth", "Loopback", "Filter", "QoS", "VPN", "Tunnel", "WireGuard", "Tailscale",
     ];
 
-    private static readonly string[] WirelessNameParts = ["Wi-Fi", "WiFi", "Wireless", "WLAN", "802.11"];
+    private static readonly string[] WirelessNameParts = ["Wi-Fi", "WiFi", "Wireless", "WLAN", "802.11", "无线", "無線", "ワイヤレス", "무선"];
 
     public static NetworkConnection Read()
     {

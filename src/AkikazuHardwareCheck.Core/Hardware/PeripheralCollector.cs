@@ -26,7 +26,7 @@ public static partial class PeripheralCollector
     // Laptop drivers can list the touchpad under the Mouse class with their own name.
     private static readonly string[] TouchpadNameParts = ["Touchpad", "Touch Pad", "Pointing Device", "TrackPoint", "Precision", "触控板", "触摸板", "タッチパッド"];
 
-    private static readonly string[] GenericNameParts = ["HID", "USB 输入", "USB 輸入", "USB Input", "USB 入力"];
+    private static readonly string[] GenericNameParts = ["HID", "USB 输入", "USB 輸入", "USB Input", "USB 入力", "USB 입력"];
     private static readonly string[] NetworkBuses = [@"PCI\", @"USB\"];
 
     public static List<Peripheral> Read()

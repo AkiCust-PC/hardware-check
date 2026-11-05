@@ -33,5 +33,5 @@ public sealed class Translator
     public string this[string key, params object?[] args] =>
         args.Length == 0
             ? _messages[key]
-            : string.Format(CultureInfo.CurrentCulture, _messages[key], args);
+            : string.Format(CultureInfo.InvariantCulture, _messages[key], args);
 }

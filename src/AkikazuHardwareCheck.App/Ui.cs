@@ -39,10 +39,22 @@ internal static class Ui
             _ => null,
         };
 
-        // A font missing from this Windows would otherwise fall back silently to one without these characters.
-        return family is not null && FontFamily.Families.Any(installed => installed.Name == family)
-            ? new Font(family, system.Size)
-            : system;
+        if (family is null)
+        {
+            return system;
+        }
+
+        // Asking for the font directly works on any display language, where installed fonts may list under local names.
+        // Characters a font lacks still display through Windows font linking, so a missing font only changes their style.
+        try
+        {
+            using var installed = new FontFamily(family);
+            return new Font(installed, system.Size);
+        }
+        catch (ArgumentException)
+        {
+            return system;
+        }
     }
 
     public static string FormatRate(double? bytesPerSecond)

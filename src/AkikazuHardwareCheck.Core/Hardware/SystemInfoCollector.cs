@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Management;
 using AkikazuHardwareCheck.Core.Models;
 
@@ -130,7 +131,7 @@ public static class SystemInfoCollector
 
         try
         {
-            return ManagementDateTimeConverter.ToDateTime(wmiDate).ToString("yyyy-MM-dd");
+            return ManagementDateTimeConverter.ToDateTime(wmiDate).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         }
         catch (ArgumentOutOfRangeException)
         {
