@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using System.Management;
+using System.Runtime.InteropServices;
 using AkikazuHardwareCheck.Core.Models;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
@@ -18,6 +21,7 @@ public static class GpuInfoCollector
             "SELECT PNPDeviceID, DriverVersion FROM Win32_VideoController",
             item => (DeviceId: Wmi.Text(item, "PNPDeviceID") ?? "", Version: Wmi.Text(item, "DriverVersion")));
 
+        var packages = ReadDriverPackages();
         using var factory = DXGI.CreateDXGIFactory1<IDXGIFactory1>();
         var adapterIds = new List<string>();
         for (uint index = 0; factory.EnumAdapters1(index, out var adapter).Success; index++)
@@ -43,6 +47,7 @@ public static class GpuInfoCollector
                 var description = adapter.Description1;
                 var hardwareId = adapterIds[(int)index];
                 var driver = drivers.FirstOrDefault(entry => entry.DeviceId.Contains(hardwareId, StringComparison.OrdinalIgnoreCase));
+                var package = packages.FirstOrDefault(entry => entry.DeviceId.Contains(hardwareId, StringComparison.OrdinalIgnoreCase));
                 var isSoftware = (description.Flags & AdapterFlags.Software) != 0;
                 gpus.Add(new GpuInfo(
                     MapVendor((uint)description.VendorId),
@@ -50,11 +55,30 @@ public static class GpuInfoCollector
                     (ulong)description.DedicatedVideoMemory,
                     driver.Version,
                     ClassifyKind(isSoftware, isSoftware ? null : ReadUnifiedMemory(adapter)),
-                    FormatLuid(description.Luid.HighPart, description.Luid.LowPart)));
+                    FormatLuid(description.Luid.HighPart, description.Luid.LowPart),
+                    package.Provider,
+                    package.Date));
             }
         }
 
         return gpus;
+    }
+
+    /// <summary>Who published each display driver and when. A failed read only loses these details, never the GPU list.</summary>
+    private static List<(string DeviceId, string? Provider, string? Date)> ReadDriverPackages()
+    {
+        try
+        {
+            return Wmi.Query(
+                Wmi.CIM_SCOPE,
+                "SELECT DeviceID, DriverProviderName, DriverDate FROM Win32_PnPSignedDriver WHERE DeviceClass = 'DISPLAY'",
+                item => (Wmi.Text(item, "DeviceID") ?? "", Wmi.Text(item, "DriverProviderName"), SystemInfoCollector.FormatWmiDate(Wmi.Text(item, "DriverDate"))));
+        }
+        catch (Exception exception) when (exception is ManagementException or COMException or UnauthorizedAccessException)
+        {
+            Trace.TraceWarning(exception.Message);
+            return [];
+        }
     }
 
     /// <summary>

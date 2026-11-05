@@ -91,7 +91,17 @@ public enum WindowsActivation
     Unknown,
 }
 
-public sealed record CpuInfo(string? Manufacturer, string? Model, int? PhysicalCores, int? LogicalThreads, int? MaxClockMhz);
+public sealed record CpuInfo(
+    string? Manufacturer,
+    string? Model,
+    int? PhysicalCores,
+    int? LogicalThreads,
+    int? MaxClockMhz,
+    string? Socket = null,
+    int? L2CacheKilobytes = null,
+    int? L3CacheKilobytes = null,
+    string? Identifier = null,
+    bool? IsVirtualizationEnabled = null);
 
 public enum GpuKind
 {
@@ -107,7 +117,9 @@ public sealed record GpuInfo(
     ulong? DedicatedMemoryBytes,
     string? DriverVersion,
     GpuKind Kind,
-    string? AdapterLuid)
+    string? AdapterLuid,
+    string? DriverProvider = null,
+    string? DriverDate = null)
 {
     public bool IsSoftwareAdapter => Kind == GpuKind.Software;
 }

@@ -71,6 +71,7 @@ internal sealed class MainForm : Form
     private readonly Button _memoryTestButton = Ui.Button();
     private readonly Button _diskTestButton = Ui.Button();
     private readonly Button _diskHealthButton = Ui.Button();
+    private readonly Button _cpuInfoButton = Ui.Button();
     private readonly Button _speakerTestButton = Ui.Button();
     private readonly Button _micTestButton = Ui.Button();
 
@@ -357,7 +358,7 @@ internal sealed class MainForm : Form
         panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         panel.Controls.Add(_targetPanel, 0, 0);
         panel.Controls.Add(_startButton, 0, 1);
-        panel.Controls.Add(Ui.ButtonGrid(4, _gpuOnlyButton, _cpuOnlyButton, _memoryTestButton, _diskTestButton, _diskHealthButton, _speakerTestButton, _micTestButton), 0, 2);
+        panel.Controls.Add(Ui.ButtonGrid(4, _gpuOnlyButton, _cpuOnlyButton, _memoryTestButton, _diskTestButton, _diskHealthButton, _speakerTestButton, _micTestButton, _cpuInfoButton), 0, 2);
         return panel;
     }
 
@@ -398,6 +399,7 @@ internal sealed class MainForm : Form
         _cpuOnlyButton.Click += (_, _) => _ = RunTestAsync(runIdle: false, runGpu: false, runCpu: true);
         _detailsButton.Click += (_, _) => ShowDetails();
         _diskHealthButton.Click += (_, _) => ShowDiskHealth();
+        _cpuInfoButton.Click += (_, _) => ShowCpuInfo();
         _memoryTestButton.Click += (_, _) => _ = RunMemoryTestAsync();
         _diskTestButton.Click += (_, _) => _ = RunDiskTestAsync();
         _speakerTestButton.Click += (_, _) => _ = RunSpeakerTestAsync();
@@ -562,6 +564,7 @@ internal sealed class MainForm : Form
         _cpuOnlyButton.Text = _t["ui.cpuOnly"];
         _detailsButton.Text = _t["ui.details"];
         _diskHealthButton.Text = _t["ui.diskHealth"];
+        _cpuInfoButton.Text = _t["ui.cpuInfo"];
         _memoryTestButton.Text = _t["ui.memoryTest"];
         _diskTestButton.Text = _t["ui.diskTest"];
         _speakerTestButton.Text = _t["ui.speakerTest"];
@@ -664,6 +667,15 @@ internal sealed class MainForm : Form
         form.ShowDialog(this);
     }
 
+    private void ShowCpuInfo()
+    {
+        if (_hardware is { } hardware)
+        {
+            using var form = new CpuInfoForm(_t, hardware, Font);
+            form.ShowDialog(this);
+        }
+    }
+
     private void FillTargetBox()
     {
         var selected = _targetBox.SelectedIndex;
@@ -724,8 +736,7 @@ internal sealed class MainForm : Form
         foreach (var line in HardwareSummary.Lines(_t, _hardware, !_settings.IsModelsOnlyView))
         {
             // Health lines come in drive order, so each one takes its color from the next drive.
-            var needsAttention = (line.Label == _t["report.diskHealth"] && driveHealth.TryDequeue(out var health) && DiskHealthSummary.NeedsAttention(health))
-                || (line.Label == _t["summary.whea"] && _hardware.Reliability?.WheaErrors > 0);
+            var needsAttention = line.Label == _t["report.diskHealth"] && driveHealth.TryDequeue(out var health) && DiskHealthSummary.NeedsAttention(health);
             rows.Add(new InfoRow(line.Label, line.Value, needsAttention ? Ui.AlertColor : null));
         }
 
@@ -742,12 +753,11 @@ internal sealed class MainForm : Form
                 rows.Add(new InfoRow(_t["summary.cooler"], coolerName));
             }
 
-            if (_hardware.Environment.Activation != WindowsActivation.Unknown)
-            {
-                rows.Add(new InfoRow(_t["ui.activation"], _t[EnumText.Key("activation", _hardware.Environment.Activation)]));
-            }
-
             rows.AddRange(HardwareSummary.PeripheralLines(_t, _hardware.Peripherals).Select(line => new InfoRow(line.Label, line.Value)));
+            if (HardwareSummary.LastBootLine(_t, _hardware) is { } lastBoot)
+            {
+                rows.Add(new InfoRow(lastBoot.Label, lastBoot.Value));
+            }
         }
 
         _hardwareList.SetRows(rows);
@@ -1038,6 +1048,7 @@ internal sealed class MainForm : Form
         _targetBox.Enabled = !isRunning;
         _detailsButton.Enabled = _lastRun is not null;
         _diskHealthButton.Enabled = isReady;
+        _cpuInfoButton.Enabled = isReady;
         _memoryTestButton.Enabled = isReady && !isRunning;
         _diskTestButton.Enabled = isReady && !isRunning;
         _speakerTestButton.Enabled = isReady && !isRunning;
@@ -1224,7 +1235,7 @@ internal sealed class MainForm : Form
 
         try
         {
-            Clipboard.SetText(HardwareSummary.AsText(HardwareSummary.Lines(_t, _hardware, !_settings.IsModelsOnlyView)));
+            Clipboard.SetText(HardwareSummary.AsText(HardwareSummary.Lines(_t, _hardware, !_settings.IsModelsOnlyView).Append(_settings.IsModelsOnlyView ? null : HardwareSummary.LastBootLine(_t, _hardware)).OfType<SummaryLine>()));
             SetStatus(_t["ui.copied"]);
         }
         catch (Exception exception) when (exception is ExternalException or ThreadStateException)

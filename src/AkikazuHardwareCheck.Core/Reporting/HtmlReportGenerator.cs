@@ -50,7 +50,7 @@ public sealed class HtmlReportGenerator(Translator t)
         $"<tr>{string.Concat(encodedCells.Select(cell => $"<td>{cell}</td>"))}</tr>";
 
     private string HardwareRows(HardwareInventory hardware) =>
-        string.Concat(HardwareSummary.Lines(t, hardware).Select(line => Row(Encode(line.Label), Encode(line.Value))));
+        string.Concat(HardwareSummary.Lines(t, hardware).Append(HardwareSummary.LastBootLine(t, hardware)).OfType<SummaryLine>().Select(line => Row(Encode(line.Label), Encode(line.Value))));
 
     private string CoolingText(CheckReport report)
     {

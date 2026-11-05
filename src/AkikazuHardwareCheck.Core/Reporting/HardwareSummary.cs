@@ -30,15 +30,9 @@ public static class HardwareSummary
             }
         }
 
-        void AddOrNone(string label, IReadOnlyList<string>? names)
+        if (isFull)
         {
-            if (names is not { Count: > 0 })
-            {
-                lines.Add(new SummaryLine(label, t["common.none"]));
-                return;
-            }
-
-            lines.AddRange(names.Select(name => new SummaryLine(label, name)));
+            lines.Add(new SummaryLine(t["summary.time"], TimeText(DateTimeOffset.Now, TimeZoneInfo.Local)));
         }
 
         if (hardware.Computer is { } computer)
@@ -47,7 +41,8 @@ public static class HardwareSummary
         }
 
         var integrated = hardware.Gpus.FirstOrDefault(gpu => gpu.Kind == GpuKind.Integrated);
-        AddAll(t["summary.processor"], hardware.Cpus, cpu => FormatCpu(t, cpu, integrated, unavailable));
+        var microcode = isFull ? hardware.Reliability?.MicrocodeRevision : null;
+        AddAll(t["summary.processor"], hardware.Cpus, cpu => FormatCpu(t, cpu, integrated, unavailable, microcode));
         AddGraphics(t, hardware, lines, unavailable);
         AddIfRead(t["section.motherboard"], hardware.Motherboard is { } board ? FormatBoard(board, unavailable, isFull) : null);
         AddIfRead(t["section.memory"], hardware.Memory is { } memory ? FormatMemory(memory, unavailable) : null);
@@ -55,13 +50,11 @@ public static class HardwareSummary
         AddAll(t["section.displays"], hardware.Displays, display => FormatDisplay(t, display, unavailable));
         if (isFull)
         {
-            AddOrNone(t["summary.wiredCard"], hardware.WiredAdapters);
-            AddOrNone(t["summary.wirelessCard"], hardware.WirelessAdapters);
-            AddIfRead(t["summary.microcode"], hardware.Reliability?.MicrocodeRevision);
-            AddIfRead(t["summary.whea"], WheaText(t, hardware.Reliability));
+            AddAll(t["summary.wiredCard"], hardware.WiredAdapters ?? [], name => name);
+            AddAll(t["summary.wirelessCard"], hardware.WirelessAdapters ?? [], name => name);
             foreach (var card in hardware.Gpus.Where(gpu => gpu.Kind is not (GpuKind.Software or GpuKind.Integrated)))
             {
-                AddIfRead(t["summary.gpuDriver"], card.DriverVersion);
+                AddIfRead(t["summary.gpuDriver"], FormatDriver(card));
             }
 
             lines.AddRange((hardware.DiskHealth ?? []).Where(health => health.Status != DiskHealthStatus.Unknown).Select(health => new SummaryLine(t["report.diskHealth"], DiskHealthSummary.Headline(t, health))));
@@ -76,56 +69,49 @@ public static class HardwareSummary
             }
 
             AddIfRead(t["summary.network"], hardware.Network is { } network ? FormatNetwork(t, network) : null);
-            AddIfRead(t["summary.system"], hardware.Environment.OperatingSystem is { Name: { } systemName } system ? $"{systemName} {system.DisplayVersion}".TrimEnd() : null);
+            AddIfRead(t["summary.system"], FormatSystem(t, hardware.Environment));
             if (hardware.Locale is { } locale)
             {
                 lines.Add(new SummaryLine(t["summary.language"], FormatLocale(t, locale)));
             }
 
-            lines.Add(new SummaryLine(t["summary.time"], TimeText(DateTimeOffset.Now, TimeZoneInfo.Local)));
-            if (hardware.Reliability?.LastBootAt is { } bootedAt)
-            {
-                var hours = (long)(DateTimeOffset.Now - bootedAt).TotalHours;
-                lines.Add(new SummaryLine(t["summary.lastBoot"], t["summary.lastBootValue", bootedAt.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture), hours]));
-            }
-
-            AddIfRead("TPM", hardware.Security?.TpmVersion);
-            AddIfRead(t["summary.secureBoot"], hardware.Security?.SecureBootEnabled switch
-            {
-                true => t["summary.enabled"],
-                false => t["summary.disabled"],
-                _ => null,
-            });
+            AddIfRead(t["summary.secureBoot"], FormatSecurity(t, hardware.Security));
         }
 
         return lines;
     }
 
-    private static string? WheaText(Translator t, ReliabilityInfo? reliability) =>
-        reliability?.WheaErrors is { } count ? t["summary.wheaValue", ReliabilityCollector.WHEA_WINDOW_DAYS, count] : null;
+    /// <summary>When Windows last started, shown at the end of the list, or null when unread.</summary>
+    public static SummaryLine? LastBootLine(Translator t, HardwareInventory hardware)
+    {
+        if (hardware.Reliability?.LastBootAt is not { } bootedAt)
+        {
+            return null;
+        }
+
+        var hours = (long)(DateTimeOffset.Now - bootedAt).TotalHours;
+        return new SummaryLine(t["summary.lastBoot"], t["summary.lastBootValue", bootedAt.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture), hours]);
+    }
 
     public static string TimeText(DateTimeOffset now, TimeZoneInfo zone) =>
         $"{now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)} {zone.DisplayName}";
 
-    /// <summary>One line per device. Mouse and keyboard, speaker, microphone and camera always show, so a missing one reads as "none".</summary>
+    /// <summary>One row per kind of device, with each device on its own line. A kind with no device has no row.</summary>
     public static List<SummaryLine> PeripheralLines(Translator t, IReadOnlyList<Peripheral>? peripherals)
     {
         var all = peripherals ?? [];
         var lines = new List<SummaryLine>();
         foreach (var kind in Enum.GetValues<PeripheralKind>())
         {
-            var label = t[EnumText.Key("peripheral", kind)];
-            var devices = all.Where(item => item.Kind == kind).ToList();
-            if (devices.Count == 0 && kind is (PeripheralKind.Input or PeripheralKind.Speaker or PeripheralKind.Microphone or PeripheralKind.Camera))
-            {
-                lines.Add(new SummaryLine(label, t["common.none"]));
-            }
-
-            lines.AddRange(devices.Select(item =>
+            var names = all.Where(item => item.Kind == kind).Select(item =>
             {
                 var name = item.Name ?? t["peripheral.unnamed"];
-                return new SummaryLine(label, item.IsBluetooth ? t["peripheral.viaBluetooth", name] : name);
-            }));
+                return item.IsBluetooth ? t["peripheral.viaBluetooth", name] : name;
+            }).ToList();
+            if (names.Count > 0)
+            {
+                lines.Add(new SummaryLine(t[EnumText.Key("peripheral", kind)], string.Join(Environment.NewLine, names)));
+            }
         }
 
         return lines;
@@ -165,7 +151,13 @@ public static class HardwareSummary
         return text.Length > 0 ? text : unavailable;
     }
 
-    private static string FormatCpu(Translator t, CpuInfo cpu, GpuInfo? integrated, string unavailable)
+    private static string FormatCpu(Translator t, CpuInfo cpu, GpuInfo? integrated, string unavailable, string? microcode)
+    {
+        var text = FormatCpuName(t, cpu, integrated, unavailable);
+        return microcode is null ? text : $"{text} {t["summary.microcodeShort", microcode]}";
+    }
+
+    private static string FormatCpuName(Translator t, CpuInfo cpu, GpuInfo? integrated, string unavailable)
     {
         var text = t[
             "summary.cpu",
@@ -194,6 +186,43 @@ public static class HardwareSummary
         }
 
         lines.AddRange(cards.Select(gpu => new SummaryLine(label, FormatGpu(t, gpu, unavailable))));
+    }
+
+    /// <summary>Publisher, version and date. Null when the driver could not be read at all.</summary>
+    private static string? FormatDriver(GpuInfo gpu)
+    {
+        string?[] parts = [gpu.DriverProvider, gpu.DriverVersion, gpu.DriverDate];
+        var known = parts.Where(part => part is not null).ToList();
+        return known.Count > 0 ? string.Join(" ", known) : null;
+    }
+
+    /// <summary>"Activated" is added only when true: an unread state must not read as unactivated, or the reverse.</summary>
+    private static string? FormatSystem(Translator t, ProbeEnvironment environment)
+    {
+        if (environment.OperatingSystem is not { Name: { } name } system)
+        {
+            return null;
+        }
+
+        var text = $"{name} {system.DisplayVersion}".TrimEnd();
+        return environment.Activation == WindowsActivation.Activated ? $"{text} {t["activation.activated"]}" : text;
+    }
+
+    /// <summary>Secure Boot and TPM are both Windows 11 security requirements, so they share a row.</summary>
+    private static string? FormatSecurity(Translator t, SecurityInfo? security)
+    {
+        string?[] parts =
+        [
+            security?.SecureBootEnabled switch
+            {
+                true => t["summary.enabled"],
+                false => t["summary.disabled"],
+                _ => null,
+            },
+            security?.TpmVersion is { } version ? $"TPM {version}" : null,
+        ];
+        var known = parts.Where(part => part is not null).ToList();
+        return known.Count > 0 ? string.Join(" ", known) : null;
     }
 
     private static string FormatGpu(Translator t, GpuInfo gpu, string unavailable)

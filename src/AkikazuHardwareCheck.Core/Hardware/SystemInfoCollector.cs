@@ -16,13 +16,18 @@ public static class SystemInfoCollector
 
     public static List<CpuInfo> ReadCpus() => Wmi.Query(
         Wmi.CIM_SCOPE,
-        "SELECT Manufacturer, Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed FROM Win32_Processor",
+        "SELECT Manufacturer, Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed, SocketDesignation, L2CacheSize, L3CacheSize, Caption, VirtualizationFirmwareEnabled FROM Win32_Processor",
         item => new CpuInfo(
             Wmi.Text(item, "Manufacturer"),
             Wmi.Text(item, "Name"),
             Wmi.Integer(item, "NumberOfCores"),
             Wmi.Integer(item, "NumberOfLogicalProcessors"),
-            Wmi.Integer(item, "MaxClockSpeed")));
+            Wmi.Integer(item, "MaxClockSpeed"),
+            Wmi.Text(item, "SocketDesignation"),
+            Wmi.Integer(item, "L2CacheSize"),
+            Wmi.Integer(item, "L3CacheSize"),
+            Wmi.Text(item, "Caption"),
+            item["VirtualizationFirmwareEnabled"] as bool?));
 
     public static MotherboardInfo ReadMotherboard()
     {
@@ -122,7 +127,7 @@ public static class SystemInfoCollector
             .FirstOrDefault();
     }
 
-    private static string? FormatWmiDate(string? wmiDate)
+    internal static string? FormatWmiDate(string? wmiDate)
     {
         if (wmiDate is null)
         {

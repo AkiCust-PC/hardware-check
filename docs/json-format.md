@@ -32,6 +32,8 @@
 | `WiredAdapters`、`WirelessAdapters` | 有线网卡和无线网卡名称 |
 | `Locale` | `DisplayLanguage`、`Format`、`SystemLocale`、`AnsiCodePage` |
 | `Reliability` | `WheaErrors`（近 30 天）、`MicrocodeRevision`、`LastBootAt` |
+| `Cpus[]` 附加字段 | `Socket`、`L2CacheKilobytes`、`L3CacheKilobytes`、`Identifier`、`IsVirtualizationEnabled` |
+| `Gpus[]` 附加字段 | `DriverProvider`、`DriverDate` |
 | `Computer` | 品牌机和笔记本的 `Manufacturer`、`Model`、`IsLaptop`；自己组装的电脑为 `null` |
 | `Battery` | `DesignedMilliwattHours`、`FullMilliwattHours`、`HealthPercent`；没有电池时为 `null` |
 

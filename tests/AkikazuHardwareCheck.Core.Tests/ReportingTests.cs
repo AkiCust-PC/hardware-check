@@ -229,21 +229,58 @@ public class ReportingTests
     }
 
     [Fact]
-    public void ReliabilityLinesAppearInTheFullViewOnlyWhenRead()
+    public void FullViewOrderAndMergedRows()
     {
         var t = Translator.Load(AppLanguage.SIMPLIFIED_CHINESE);
-        var hardware = Hardware() with { Reliability = new ReliabilityInfo(2, "0x11A", DateTimeOffset.Now.AddHours(-5)) };
+        var hardware = Hardware() with { Reliability = new ReliabilityInfo(2, "0x11A", DateTimeOffset.Now.AddHours(-5)), Security = new SecurityInfo(true, "2.0") };
 
         var full = HardwareSummary.Lines(t, hardware);
 
-        Assert.Equal("0x11A", full.Single(line => line.Label == t["summary.microcode"]).Value);
-        Assert.Contains("2", full.Single(line => line.Label == t["summary.whea"]).Value);
-        Assert.Contains("5", full.Single(line => line.Label == t["summary.lastBoot"]).Value);
-        Assert.Equal("32.0", full.Single(line => line.Label == t["summary.gpuDriver"]).Value);
-        Assert.DoesNotContain(HardwareSummary.Lines(t, hardware, isFull: false), line => line.Label == t["summary.whea"]);
+        Assert.Equal(t["summary.time"], full[0].Label);
+        Assert.Contains("微码 0x11A", full.Single(line => line.Label == t["summary.processor"]).Value);
+        Assert.DoesNotContain(full, line => line.Label == t["summary.whea"] || line.Label == t["summary.microcode"] || line.Label == "TPM" || line.Label == t["summary.lastBoot"]);
+        Assert.Equal("已开启 TPM 2.0", full.Single(line => line.Label == t["summary.secureBoot"]).Value);
+        Assert.Contains("5", HardwareSummary.LastBootLine(t, hardware)?.Value);
+        Assert.EndsWith("已激活", full.Single(line => line.Label == t["summary.system"]).Value);
 
-        var unread = HardwareSummary.Lines(t, Hardware() with { Reliability = new ReliabilityInfo(null, null, null) });
-        Assert.DoesNotContain(unread, line => line.Label == t["summary.whea"] || line.Label == t["summary.microcode"] || line.Label == t["summary.lastBoot"]);
+        var models = HardwareSummary.Lines(t, hardware, isFull: false);
+        Assert.DoesNotContain(models, line => line.Label == t["summary.time"]);
+        Assert.DoesNotContain("微码", models.Single(line => line.Label == t["summary.processor"]).Value);
+
+        var unactivated = hardware with { Environment = hardware.Environment with { Activation = WindowsActivation.NotActivated } };
+        Assert.DoesNotContain("激活", HardwareSummary.Lines(t, unactivated).Single(line => line.Label == t["summary.system"]).Value);
+    }
+
+    [Fact]
+    public void DriverRowShowsWhatWasRead()
+    {
+        var t = Translator.Load(AppLanguage.SIMPLIFIED_CHINESE);
+        GpuInfo card = new("NVIDIA", "RTX 4070", 12UL << 30, "32.0", GpuKind.Discrete, "0:1", "NVIDIA", "2026-04-29");
+
+        Assert.Equal("NVIDIA 32.0 2026-04-29", HardwareSummary.Lines(t, Hardware() with { Gpus = [card] }).Single(line => line.Label == t["summary.gpuDriver"]).Value);
+        Assert.Equal("32.0", HardwareSummary.Lines(t, Hardware() with { Gpus = [card with { DriverProvider = null, DriverDate = null }] }).Single(line => line.Label == t["summary.gpuDriver"]).Value);
+        Assert.DoesNotContain(HardwareSummary.Lines(t, Hardware() with { Gpus = [card with { DriverProvider = null, DriverDate = null, DriverVersion = null }] }), line => line.Label == t["summary.gpuDriver"]);
+    }
+
+    [Fact]
+    public void CpuWindowListsWhatWasReadAndWhea()
+    {
+        var t = Translator.Load(AppLanguage.SIMPLIFIED_CHINESE);
+        var hardware = Hardware() with
+        {
+            Cpus = [new CpuInfo("Intel", "Core Ultra 5 225", 10, 10, 3300, "LGA1851", 22528, 20480, "Intel64 Family 6", false)],
+            Reliability = new ReliabilityInfo(3, "0x11A", null),
+        };
+
+        var lines = CpuSummary.Details(t, hardware);
+
+        Assert.Equal("LGA1851", lines.Single(line => line.Label == t["cpu.socket"]).Value);
+        Assert.Equal("22 MB", lines.Single(line => line.Label == t["cpu.cacheL2"]).Value);
+        Assert.Equal("未开启", lines.Single(line => line.Label == t["cpu.virtualization"]).Value);
+        Assert.Contains("3", lines.Single(line => line.Label == t["summary.whea"]).Value);
+
+        var sparse = CpuSummary.Details(t, Hardware() with { Cpus = [new CpuInfo(null, "X", null, null, null)], Reliability = null });
+        Assert.Equal([t["summary.processor"]], sparse.Select(line => line.Label));
     }
 
     [Fact]
@@ -259,7 +296,6 @@ public class ReportingTests
         Assert.DoesNotContain(t["section.memory"], labels);
         Assert.DoesNotContain(t["section.disks"], labels);
         Assert.DoesNotContain(t["summary.network"], labels);
-        Assert.DoesNotContain("TPM", labels);
         Assert.DoesNotContain(t["summary.secureBoot"], labels);
     }
 

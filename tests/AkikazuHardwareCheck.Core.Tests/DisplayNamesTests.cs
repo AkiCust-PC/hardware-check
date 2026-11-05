@@ -122,15 +122,13 @@ public class DisplayNamesTests
     }
 
     [Fact]
-    public void EachPeripheralHasItsOwnRowAndMissingOnesReadAsNone()
+    public void DevicesOfOneKindShareARowAndMissingKindsHaveNone()
     {
         var lines = HardwareSummary.PeripheralLines(Chinese, Hardware().Peripherals);
 
-        Assert.Equal(["ROG AZOTH", "ROG HARPE"], lines.Where(line => line.Label == "键鼠").Select(line => line.Value));
+        Assert.Equal($"ROG AZOTH{Environment.NewLine}ROG HARPE", lines.Single(line => line.Label == "键鼠").Value);
         Assert.Equal("LG Ultra HD", lines.Single(line => line.Label == "扬声器").Value);
-        Assert.Equal("无", lines.Single(line => line.Label == "麦克风").Value);
-        Assert.Equal("无", lines.Single(line => line.Label == "摄像头").Value);
-        Assert.DoesNotContain(lines, line => line.Label == "打印机");
+        Assert.DoesNotContain(lines, line => line.Label is "麦克风" or "摄像头" or "打印机");
     }
 
     private static AudioCandidate Audio(string name, string? bus, uint? formFactor) => new(name, bus, formFactor);
@@ -208,15 +206,13 @@ public class DisplayNamesTests
     {
         Assert.Equal("Intel Ethernet Controller I226-V", Value(Hardware(), "有线网卡"));
         Assert.Equal("MediaTek Wi-Fi 7 MT7925", Value(Hardware(), "无线网卡"));
-        Assert.Equal("无", Value(Hardware() with { WiredAdapters = [] }, "有线网卡"));
+        Assert.DoesNotContain(HardwareSummary.Lines(Chinese, Hardware() with { WiredAdapters = [] }), line => line.Label == "有线网卡");
     }
 
     [Fact]
     public void OptionalDevicesOnlyShowWhenPresent()
     {
-        var labels = HardwareSummary.PeripheralLines(Chinese, []).Select(line => line.Label).ToList();
-
-        Assert.Equal(["键鼠", "扬声器", "麦克风", "摄像头"], labels);
+        Assert.Empty(HardwareSummary.PeripheralLines(Chinese, []));
     }
 
     [Theory]
