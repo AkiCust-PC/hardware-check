@@ -1,0 +1,42 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "构建（调试）",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["build", "src/AkikazuHardwareCheck.App/AkikazuHardwareCheck.App.csproj", "-c", "Debug", "--nologo"],
+      "problemMatcher": "$msCompile",
+      "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      "label": "运行工具（普通权限）",
+      "type": "process",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/run.ps1", "-NoElevate"],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "运行工具（管理员，会安装传感器驱动）",
+      "type": "process",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/run.ps1"],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "运行测试",
+      "type": "process",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/test.ps1"],
+      "problemMatcher": "$msCompile",
+      "group": { "kind": "test", "isDefault": true }
+    },
+    {
+      "label": "打包发布版",
+      "type": "process",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/publish.ps1"],
+      "problemMatcher": "$msCompile"
+    }
+  ]
+}

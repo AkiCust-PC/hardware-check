@@ -50,7 +50,7 @@ public sealed class HtmlReportGenerator(Translator t)
         $"<tr>{string.Concat(encodedCells.Select(cell => $"<td>{cell}</td>"))}</tr>";
 
     private string HardwareRows(HardwareInventory hardware) =>
-        string.Concat(HardwareSummary.Lines(t, hardware).Append(HardwareSummary.LastBootLine(t, hardware)).OfType<SummaryLine>().Select(line => Row(Encode(line.Label), Encode(line.Value))));
+        string.Concat(HardwareSummary.Lines(t, hardware).Concat(HardwareSummary.HistoryLines(t, hardware)).Select(line => Row(Encode(line.Label), Encode(line.Value))));
 
     private string CoolingText(CheckReport report)
     {
@@ -115,7 +115,10 @@ public sealed class HtmlReportGenerator(Translator t)
 
     private string ToolRows(CheckReport report)
     {
-        var rows = "";
+        // Hardware errors are evidence about stability, so they sit with the test results and are read after the tests.
+        var rows = HardwareSummary.WheaText(t, report.Hardware.Reliability) is { } whea
+            ? Row(Encode(t["summary.whea"]), Marked(whea, report.Hardware.Reliability?.WheaErrors > 0))
+            : "";
         if (report.MemoryTest is { } memory)
         {
             rows += Row(Encode(t["ui.memoryTest"]), Marked(ToolTestSummary.Text(t, memory), ToolTestSummary.HasProblem(memory)));

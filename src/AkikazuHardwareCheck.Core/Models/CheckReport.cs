@@ -80,7 +80,7 @@ public sealed record ProbeEnvironment(
     public bool IsSensorAccessLimited => !IsAdministrator || !IsPawnIoInstalled;
 }
 
-public sealed record OperatingSystemInfo(string? Name, string? DisplayVersion, string? Build, string Architecture);
+public sealed record OperatingSystemInfo(string? Name, string? DisplayVersion, string? Build, string Architecture, string? InstallDate = null);
 
 public enum WindowsActivation
 {

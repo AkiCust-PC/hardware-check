@@ -81,17 +81,27 @@ public static class HardwareSummary
         return lines;
     }
 
-    /// <summary>When Windows last started, shown at the end of the list, or null when unread.</summary>
-    public static SummaryLine? LastBootLine(Translator t, HardwareInventory hardware)
+    /// <summary>When Windows was installed and last started, shown at the very end of the full list.</summary>
+    public static List<SummaryLine> HistoryLines(Translator t, HardwareInventory hardware)
     {
-        if (hardware.Reliability?.LastBootAt is not { } bootedAt)
+        var lines = new List<SummaryLine>();
+        if (hardware.Environment.OperatingSystem?.InstallDate is { } installed)
         {
-            return null;
+            lines.Add(new SummaryLine(t["summary.installDate"], installed));
         }
 
-        var hours = (long)(DateTimeOffset.Now - bootedAt).TotalHours;
-        return new SummaryLine(t["summary.lastBoot"], t["summary.lastBootValue", bootedAt.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture), hours]);
+        if (hardware.Reliability?.LastBootAt is { } bootedAt)
+        {
+            var hours = (long)(DateTimeOffset.Now - bootedAt).TotalHours;
+            lines.Add(new SummaryLine(t["summary.lastBoot"], t["summary.lastBootValue", bootedAt.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture), hours]));
+        }
+
+        return lines;
     }
+
+    /// <summary>Windows hardware errors over the recent window, or null when the log could not be read.</summary>
+    public static string? WheaText(Translator t, ReliabilityInfo? reliability) =>
+        reliability?.WheaErrors is { } count ? t["summary.wheaValue", ReliabilityCollector.WHEA_WINDOW_DAYS, count] : null;
 
     public static string TimeText(DateTimeOffset now, TimeZoneInfo zone) =>
         $"{now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)} {zone.DisplayName}";
@@ -123,8 +133,8 @@ public static class HardwareSummary
     /// <summary>The three settings usually match, and a single name then says it all.</summary>
     private static string FormatLocale(Translator t, LocaleInfo locale) =>
         locale.DisplayLanguage == locale.Format && locale.Format == locale.SystemLocale
-            ? t["summary.localeSame", LanguageName(locale.DisplayLanguage), locale.AnsiCodePage]
-            : t["summary.localeValue", LanguageName(locale.DisplayLanguage), LanguageName(locale.Format), LanguageName(locale.SystemLocale), locale.AnsiCodePage];
+            ? LanguageName(locale.DisplayLanguage)
+            : t["summary.localeValue", LanguageName(locale.DisplayLanguage), LanguageName(locale.Format), LanguageName(locale.SystemLocale)];
 
     /// <summary>The name in that language itself, so it reads correctly whatever language the tool is showing.</summary>
     private static string LanguageName(string code)
@@ -196,7 +206,7 @@ public static class HardwareSummary
         return known.Count > 0 ? string.Join(" ", known) : null;
     }
 
-    /// <summary>"Activated" is added only when true: an unread state must not read as unactivated, or the reverse.</summary>
+    /// <summary>The activation state follows the name. A state that could not be read adds nothing rather than a guess.</summary>
     private static string? FormatSystem(Translator t, ProbeEnvironment environment)
     {
         if (environment.OperatingSystem is not { Name: { } name } system)
@@ -205,7 +215,7 @@ public static class HardwareSummary
         }
 
         var text = $"{name} {system.DisplayVersion}".TrimEnd();
-        return environment.Activation == WindowsActivation.Activated ? $"{text} {t["activation.activated"]}" : text;
+        return environment.Activation == WindowsActivation.Unknown ? text : $"{text} {t[EnumText.Key("activation", environment.Activation)]}";
     }
 
     /// <summary>Secure Boot and TPM are both Windows 11 security requirements, so they share a row.</summary>
@@ -234,7 +244,7 @@ public static class HardwareSummary
     private static string FormatBoard(MotherboardInfo board, string unavailable, bool isFull)
     {
         var vendor = board.Manufacturer is { } manufacturer ? DisplayNames.BoardVendor(manufacturer) : unavailable;
-        var bios = isFull && board.BiosVersion is { } version ? $" BIOS {version}" : "";
+        var bios = isFull && board.BiosVersion is { } version ? $" BIOS {version}{(board.BiosDate is { } date ? $" {date}" : "")}" : "";
         return $"{vendor} {board.Model ?? unavailable}{bios}";
     }
 

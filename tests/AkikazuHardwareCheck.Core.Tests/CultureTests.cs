@@ -30,6 +30,7 @@ public class CultureTests
         new NetworkConnection(NetworkKind.WiFi, "MediaTek", 2882, 85),
         new SystemDriveSpace(600_000_000_000, 2_000_000_000_000),
         Battery: new BatteryInfo(50_000, 41_250, 83),
+        Locale: new LocaleInfo("zh-CN", "ja-JP", "ja-JP", 932),
         Reliability: new ReliabilityInfo(1234, "0x11A", null));
 
     private static TestRunResult Run() => new(

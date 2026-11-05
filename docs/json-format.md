@@ -30,6 +30,7 @@
 | `DiskHealth` | 每块硬盘的 `Status`（`Good`、`Caution`、`Bad`、`Unknown`）、寿命、温度、`MediaErrors`（0E）、通电时间等 |
 | `Peripherals` | `Kind`（`Input`、`Speaker`、`Microphone`、`Camera`、`Printer`、`Touchpad`、`Touchscreen`、`Gamepad`）、`Name`、`IsBluetooth` |
 | `WiredAdapters`、`WirelessAdapters` | 有线网卡和无线网卡名称 |
+| `Environment.OperatingSystem.InstallDate` | Windows 安装日期 |
 | `Locale` | `DisplayLanguage`、`Format`、`SystemLocale`、`AnsiCodePage` |
 | `Reliability` | `WheaErrors`（近 30 天）、`MicrocodeRevision`、`LastBootAt` |
 | `Cpus[]` 附加字段 | `Socket`、`L2CacheKilobytes`、`L3CacheKilobytes`、`Identifier`、`IsVirtualizationEnabled` |

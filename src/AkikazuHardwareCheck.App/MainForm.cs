@@ -754,10 +754,7 @@ internal sealed class MainForm : Form
             }
 
             rows.AddRange(HardwareSummary.PeripheralLines(_t, _hardware.Peripherals).Select(line => new InfoRow(line.Label, line.Value)));
-            if (HardwareSummary.LastBootLine(_t, _hardware) is { } lastBoot)
-            {
-                rows.Add(new InfoRow(lastBoot.Label, lastBoot.Value));
-            }
+            rows.AddRange(HardwareSummary.HistoryLines(_t, _hardware).Select(line => new InfoRow(line.Label, line.Value)));
         }
 
         _hardwareList.SetRows(rows);
@@ -909,6 +906,7 @@ internal sealed class MainForm : Form
             _testStop = null;
         }
 
+        await RefreshReliabilityAsync();
         _phaseLabel.Text = _t["ui.notRunning"];
         _progressBar.Value = 0;
         RenderResults();
@@ -994,6 +992,7 @@ internal sealed class MainForm : Form
             _testStop = null;
         }
 
+        await RefreshReliabilityAsync();
         _phaseLabel.Text = _t["ui.notRunning"];
         _progressBar.Value = 0;
         RenderResults();
@@ -1001,6 +1000,21 @@ internal sealed class MainForm : Form
         if (_closeAfterTest)
         {
             Close();
+        }
+    }
+
+    /// <summary>A test can itself cause hardware errors, so the count shown with its results is read after it ends.</summary>
+    private async Task RefreshReliabilityAsync()
+    {
+        if (_hardware is null)
+        {
+            return;
+        }
+
+        var reliability = await Task.Run(ReliabilityCollector.Read);
+        if (_hardware is { } hardware)
+        {
+            _hardware = hardware with { Reliability = reliability };
         }
     }
 
@@ -1127,6 +1141,12 @@ internal sealed class MainForm : Form
 
     private void AddToolRows(List<InfoRow> rows)
     {
+        var hasResult = _lastRun is not null || _memoryResult is not null || _diskResult is not null || _audioCheck != new AudioCheckResult(null, null);
+        if (hasResult && HardwareSummary.WheaText(_t, _hardware?.Reliability) is { } whea)
+        {
+            rows.Add(new InfoRow(_t["summary.whea"], whea, _hardware?.Reliability?.WheaErrors > 0 ? Ui.AlertColor : null));
+        }
+
         if (_memoryResult is { } memory)
         {
             rows.Add(new InfoRow(_t["ui.memoryTest"], ToolTestSummary.Text(_t, memory), ToolTestSummary.HasProblem(memory) ? Ui.AlertColor : null));
@@ -1235,7 +1255,7 @@ internal sealed class MainForm : Form
 
         try
         {
-            Clipboard.SetText(HardwareSummary.AsText(HardwareSummary.Lines(_t, _hardware, !_settings.IsModelsOnlyView).Append(_settings.IsModelsOnlyView ? null : HardwareSummary.LastBootLine(_t, _hardware)).OfType<SummaryLine>()));
+            Clipboard.SetText(HardwareSummary.AsText(HardwareSummary.Lines(_t, _hardware, !_settings.IsModelsOnlyView).Concat(_settings.IsModelsOnlyView ? [] : HardwareSummary.HistoryLines(_t, _hardware))));
             SetStatus(_t["ui.copied"]);
         }
         catch (Exception exception) when (exception is ExternalException or ThreadStateException)

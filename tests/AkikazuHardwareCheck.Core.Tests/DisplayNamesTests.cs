@@ -37,7 +37,7 @@ public class DisplayNamesTests
         Assert.Equal("Intel Core Ultra 5 225 10核 10线程 含核显", Value(Hardware(), "处理器"));
         Assert.Contains(lines, line => line is { Label: "显卡", Value: "Intel Arc Pro B60 23.8GB显存" });
         Assert.Single(lines, line => line.Label == "显卡");
-        Assert.Equal("ASUS ROG STRIX B860-G GAMING WIFI BIOS 1801", Value(Hardware(), "主板"));
+        Assert.Equal("ASUS ROG STRIX B860-G GAMING WIFI BIOS 1801 2025-09-12", Value(Hardware(), "主板"));
         Assert.Equal("G.Skill DDR5 48GB (24GB × 2) 8400MT/s F5-8400J4052G24G", Value(Hardware(), "内存"));
         Assert.Equal("Crucial CT2000T700SSD3 2TB NVMe SSD PCIe 5.0 x4", Value(Hardware(), "硬盘"));
         Assert.Equal("LG Ultra HD 3840 × 2160 60Hz 27.2英寸 DisplayPort", Value(Hardware(), "显示器"));

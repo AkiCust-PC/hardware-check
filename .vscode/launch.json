@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "运行工具（调试，普通权限）",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "构建（调试）",
+      "program": "${workspaceFolder}/src/AkikazuHardwareCheck.App/bin/Debug/net10.0-windows/win-x64/AkikazuHardwareCheck.exe",
+      "args": ["--no-elevate"],
+      "cwd": "${workspaceFolder}",
+      "console": "internalConsole",
+      "stopAtEntry": false
+    }
+  ]
+}

@@ -1,5 +1,4 @@
 using System.Globalization;
-using AkikazuHardwareCheck.Core.Hardware;
 using AkikazuHardwareCheck.Core.Localization;
 using AkikazuHardwareCheck.Core.Models;
 
@@ -41,7 +40,7 @@ public static class CpuSummary
         }
 
         Add("summary.microcode", hardware.Reliability?.MicrocodeRevision);
-        Add("summary.whea", hardware.Reliability?.WheaErrors is { } count ? t["summary.wheaValue", ReliabilityCollector.WHEA_WINDOW_DAYS, count] : null);
+        Add("summary.whea", HardwareSummary.WheaText(t, hardware.Reliability));
         return lines;
     }
 

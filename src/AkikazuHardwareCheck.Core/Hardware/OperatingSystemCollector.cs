@@ -24,15 +24,19 @@ public static class OperatingSystemCollector
     public static OperatingSystemInfo ReadOperatingSystem()
     {
         // ProductName in the registry still says "Windows 10" on Windows 11, so the name comes from WMI.
-        var name = Wmi.Query(Wmi.CIM_SCOPE, "SELECT Caption FROM Win32_OperatingSystem", item => Wmi.Text(item, "Caption"))
+        var system = Wmi.Query(
+            Wmi.CIM_SCOPE,
+            "SELECT Caption, InstallDate FROM Win32_OperatingSystem",
+            item => (Name: Wmi.Text(item, "Caption"), InstallDate: SystemInfoCollector.FormatWmiDate(Wmi.Text(item, "InstallDate"))))
             .FirstOrDefault();
 
         using var key = Registry.LocalMachine.OpenSubKey(CURRENT_VERSION_KEY);
         return new OperatingSystemInfo(
-            name,
+            system.Name,
             key?.GetValue("DisplayVersion") as string,
             FormatBuild(key?.GetValue("CurrentBuildNumber") as string, key?.GetValue("UBR") as int?),
-            RuntimeInformation.OSArchitecture.ToString());
+            RuntimeInformation.OSArchitecture.ToString(),
+            system.InstallDate);
     }
 
     public static WindowsActivation ReadActivation()

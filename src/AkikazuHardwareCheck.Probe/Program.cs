@@ -95,7 +95,7 @@ var report = new CheckReport(
     CheckReport.CURRENT_SCHEMA_VERSION,
     CheckReport.CurrentToolVersion,
     DateTimeOffset.Now,
-    hardware with { Diagnostics = diagnostics },
+    hardware with { Diagnostics = diagnostics, Reliability = testRun is null ? hardware.Reliability : ReliabilityCollector.Read() },
     sensors,
     CoolingEstimator.Estimate(sensors, hardware.Environment.IsSensorAccessLimited),
     testRun,

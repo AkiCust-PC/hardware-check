@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using AkikazuHardwareCheck.Core.Configuration;
 using AkikazuHardwareCheck.Core.Hardware;
@@ -240,15 +241,53 @@ public class ReportingTests
         Assert.Contains("微码 0x11A", full.Single(line => line.Label == t["summary.processor"]).Value);
         Assert.DoesNotContain(full, line => line.Label == t["summary.whea"] || line.Label == t["summary.microcode"] || line.Label == "TPM" || line.Label == t["summary.lastBoot"]);
         Assert.Equal("已开启 TPM 2.0", full.Single(line => line.Label == t["summary.secureBoot"]).Value);
-        Assert.Contains("5", HardwareSummary.LastBootLine(t, hardware)?.Value);
+        Assert.Contains("5", HardwareSummary.HistoryLines(t, hardware).Single(line => line.Label == t["summary.lastBoot"]).Value);
         Assert.EndsWith("已激活", full.Single(line => line.Label == t["summary.system"]).Value);
 
         var models = HardwareSummary.Lines(t, hardware, isFull: false);
         Assert.DoesNotContain(models, line => line.Label == t["summary.time"]);
         Assert.DoesNotContain("微码", models.Single(line => line.Label == t["summary.processor"]).Value);
 
-        var unactivated = hardware with { Environment = hardware.Environment with { Activation = WindowsActivation.NotActivated } };
-        Assert.DoesNotContain("激活", HardwareSummary.Lines(t, unactivated).Single(line => line.Label == t["summary.system"]).Value);
+        string SystemRow(WindowsActivation state) =>
+            HardwareSummary.Lines(t, hardware with { Environment = hardware.Environment with { Activation = state } }).Single(line => line.Label == t["summary.system"]).Value;
+        Assert.EndsWith("未激活", SystemRow(WindowsActivation.NotActivated));
+        Assert.DoesNotContain("激活", SystemRow(WindowsActivation.Unknown));
+    }
+
+    [Fact]
+    public void BiosDateAndInstallDateAppearInTheFullList()
+    {
+        var t = Translator.Load(AppLanguage.SIMPLIFIED_CHINESE);
+        var hardware = Hardware() with { Environment = Hardware().Environment with { OperatingSystem = new OperatingSystemInfo("Windows 11", "25H2", "1", "X64", "2026-05-12") } };
+
+        Assert.EndsWith("BIOS 1.0 2026-01-01", HardwareSummary.Lines(t, hardware).Single(line => line.Label == t["section.motherboard"]).Value);
+        Assert.DoesNotContain("BIOS", HardwareSummary.Lines(t, hardware, isFull: false).Single(line => line.Label == t["section.motherboard"]).Value);
+        Assert.Equal("2026-05-12", HardwareSummary.HistoryLines(t, hardware).Single(line => line.Label == t["summary.installDate"]).Value);
+    }
+
+    [Fact]
+    public void LanguageRowHasNoCodePage()
+    {
+        var t = Translator.Load(AppLanguage.ENGLISH);
+
+        foreach (var locale in new[] { new LocaleInfo("zh-CN", "zh-CN", "zh-CN", 936), new LocaleInfo("zh-CN", "ja-JP", "ja-JP", 932) })
+        {
+            var row = HardwareSummary.Lines(t, Hardware() with { Locale = locale }).Single(line => line.Label == t["summary.language"]).Value;
+            Assert.DoesNotContain("93", row);
+        }
+    }
+
+    [Fact]
+    public void ReportShowsWheaWithTheTestResultsAndFlagsErrors()
+    {
+        var t = Translator.Load(AppLanguage.ENGLISH);
+        var clean = Report(Run()) with { Hardware = Hardware() with { Reliability = new ReliabilityInfo(0, null, null) } };
+        var failing = Report(Run()) with { Hardware = Hardware() with { Reliability = new ReliabilityInfo(4, null, null) } };
+
+        Assert.Contains(t["summary.whea"], Html(clean, AppLanguage.ENGLISH));
+        Assert.DoesNotContain($"class=\"alert\">{t["summary.wheaValue", 30, 0]}", Html(clean, AppLanguage.ENGLISH));
+        Assert.Contains($"class=\"alert\">{t["summary.wheaValue", 30, 4]}", Html(failing, AppLanguage.ENGLISH));
+        Assert.DoesNotContain(t["summary.whea"], Html(Report(Run()), AppLanguage.ENGLISH));
     }
 
     [Fact]
@@ -307,7 +346,7 @@ public class ReportingTests
 
         var full = HardwareSummary.Lines(t, hardware);
 
-        Assert.Contains("932", full.Single(line => line.Label == t["summary.language"]).Value);
+        Assert.Contains(CultureInfo.GetCultureInfo("ja-JP").NativeName, full.Single(line => line.Label == t["summary.language"]).Value);
         var same = HardwareSummary.Lines(t, hardware with { Locale = new LocaleInfo("ja-JP", "ja-JP", "ja-JP", 932) });
         Assert.DoesNotContain("Format", same.Single(line => line.Label == t["summary.language"]).Value);
         Assert.Contains(full, line => line.Label == t["summary.time"]);
