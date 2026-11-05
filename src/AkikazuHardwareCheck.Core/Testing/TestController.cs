@@ -501,7 +501,8 @@ public sealed class TestController(
                 SensorSelector.CpuTemperature(readings),
                 SensorSelector.GpuTemperature(readings, plan.TargetGpu?.Model),
                 SensorSelector.CpuLoad(readings),
-                SensorSelector.GpuLoad(readings, plan.TargetGpu?.Model)));
+                SensorSelector.GpuLoad(readings, plan.TargetGpu?.Model),
+                readings));
         }
 
         public void Dispose()

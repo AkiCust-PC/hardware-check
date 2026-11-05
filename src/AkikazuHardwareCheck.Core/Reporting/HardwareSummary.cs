@@ -37,7 +37,8 @@ public static class HardwareSummary
 
         if (hardware.Computer is { } computer)
         {
-            lines.Add(new SummaryLine(t["summary.computer"], FormatComputer(t, computer, unavailable)));
+            var brand = computer.Manufacturer is { } maker ? DisplayNames.BoardVendor(maker) : null;
+            lines.Add(new SummaryLine(t[computer.IsLaptop ? "summary.laptopPc" : "summary.desktopPc"], DisplayNames.ComputerName(brand, computer.Model)));
         }
 
         var integrated = hardware.Gpus.FirstOrDefault(gpu => gpu.Kind == GpuKind.Integrated);
@@ -46,7 +47,7 @@ public static class HardwareSummary
         AddGraphics(t, hardware, lines, unavailable);
         AddIfRead(t["section.motherboard"], hardware.Motherboard is { } board ? FormatBoard(board, unavailable, isFull) : null);
         AddIfRead(t["section.memory"], hardware.Memory is { } memory ? FormatMemory(memory, unavailable) : null);
-        AddAll(t["section.disks"], hardware.Disks, disk => FormatDisk(disk, unavailable));
+        AddAll(t["section.disks"], hardware.Disks, disk => isFull ? FormatDiskWithHealth(t, hardware, disk, unavailable) : FormatDisk(disk, unavailable));
         AddAll(t["section.displays"], hardware.Displays, display => FormatDisplay(t, display, unavailable));
         if (isFull)
         {
@@ -57,7 +58,6 @@ public static class HardwareSummary
                 AddIfRead(t["summary.gpuDriver"], FormatDriver(card));
             }
 
-            lines.AddRange((hardware.DiskHealth ?? []).Where(health => health.Status != DiskHealthStatus.Unknown).Select(health => new SummaryLine(t["report.diskHealth"], DiskHealthSummary.Headline(t, health))));
             if (hardware.Battery is { } battery)
             {
                 lines.Add(new SummaryLine(t["summary.battery"], t["summary.batteryValue", battery.HealthPercent, DisplayNames.WattHours(battery.FullMilliwattHours), DisplayNames.WattHours(battery.DesignedMilliwattHours)]));
@@ -73,12 +73,46 @@ public static class HardwareSummary
             if (hardware.Locale is { } locale)
             {
                 lines.Add(new SummaryLine(t["summary.language"], FormatLocale(t, locale)));
+                lines.Add(new SummaryLine(t["summary.encoding"], DisplayNames.EncodingName(locale.AnsiCodePage)));
             }
 
             AddIfRead(t["summary.secureBoot"], FormatSecurity(t, hardware.Security));
         }
 
-        return lines;
+        return Tidy(lines, unavailable);
+    }
+
+    /// <summary>Removes the words for anything unread, and gives devices of one kind a single label with one line each.</summary>
+    private static List<SummaryLine> Tidy(List<SummaryLine> lines, string unavailable)
+    {
+        var tidy = new List<SummaryLine>();
+        foreach (var line in lines)
+        {
+            var value = string.Join(Environment.NewLine, line.Value.Split(Environment.NewLine).Select(part => string.Join(" ", part.Replace(unavailable, "", StringComparison.Ordinal).Split(' ', StringSplitOptions.RemoveEmptyEntries))).Where(part => part.Length > 0));
+            if (value.Length == 0)
+            {
+                continue;
+            }
+
+            if (tidy.Count > 0 && tidy[^1].Label == line.Label)
+            {
+                tidy[^1] = tidy[^1] with { Value = tidy[^1].Value + Environment.NewLine + value };
+            }
+            else
+            {
+                tidy.Add(line with { Value = value });
+            }
+        }
+
+        return tidy;
+    }
+
+    /// <summary>A drive and its health stay together, so two drives can always be told apart.</summary>
+    private static string FormatDiskWithHealth(Translator t, HardwareInventory hardware, DiskInfo disk, string unavailable)
+    {
+        var name = FormatDisk(disk, unavailable);
+        var health = hardware.DiskHealth?.FirstOrDefault(item => item.DeviceId == disk.DeviceId && item.Status != DiskHealthStatus.Unknown);
+        return health is null ? name : name + Environment.NewLine + DiskHealthSummary.Headline(t, health);
     }
 
     /// <summary>When Windows was installed and last started, shown at the very end of the full list.</summary>
@@ -149,18 +183,6 @@ public static class HardwareSummary
         }
     }
 
-    private static string FormatComputer(Translator t, ComputerInfo computer, string unavailable)
-    {
-        string?[] parts =
-        [
-            computer.IsLaptop ? t["summary.laptop"] : null,
-            computer.Manufacturer is { } manufacturer ? DisplayNames.BoardVendor(manufacturer) : null,
-            computer.Model,
-        ];
-        var text = string.Join(" ", parts.Where(part => part is not null));
-        return text.Length > 0 ? text : unavailable;
-    }
-
     private static string FormatCpu(Translator t, CpuInfo cpu, GpuInfo? integrated, string unavailable, string? microcode)
     {
         var text = FormatCpuName(t, cpu, integrated, unavailable);
@@ -169,11 +191,8 @@ public static class HardwareSummary
 
     private static string FormatCpuName(Translator t, CpuInfo cpu, GpuInfo? integrated, string unavailable)
     {
-        var text = t[
-            "summary.cpu",
-            cpu.Model is { } model ? DisplayNames.CleanModel(model) : unavailable,
-            cpu.PhysicalCores?.ToString(CultureInfo.InvariantCulture) ?? unavailable,
-            cpu.LogicalThreads?.ToString(CultureInfo.InvariantCulture) ?? unavailable];
+        var name = cpu.Model is { } model ? DisplayNames.CleanModel(model) : unavailable;
+        var text = cpu is { PhysicalCores: { } cores, LogicalThreads: { } threads } ? t["summary.cpu", name, cores, threads] : name;
         if (integrated is null)
         {
             return text;
@@ -299,7 +318,7 @@ public static class HardwareSummary
             display.WidthPixels is { } width && display.HeightPixels is { } height ? $"{width} × {height}" : null,
             display.RefreshRateHz is { } rate ? $"{Math.Round(rate).ToString(CultureInfo.InvariantCulture)}Hz" : null,
             display.DiagonalInches is { } inches ? t["summary.inches", inches.ToString("0.#", CultureInfo.InvariantCulture)] : null,
-            display.Connection,
+            display.Connection == "Internal" ? t["display.internal"] : display.Connection,
         ];
         return string.Join(" ", parts.Where(part => part is not null));
     }

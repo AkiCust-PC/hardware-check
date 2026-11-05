@@ -85,7 +85,7 @@ internal sealed class InfoView : Panel
 internal sealed class MetricTile : TableLayoutPanel
 {
     private const int BAR_HEIGHT = 6;
-    private const float VALUE_FONT_SIZE = 14f;
+    private const float VALUE_FONT_SIZE = 11f;
 
     // PBM_SETSTATE from CommCtrl.h: Windows draws these states green, red and yellow in its own style.
     private const uint PBM_SETSTATE = 0x0410;
@@ -94,7 +94,7 @@ internal sealed class MetricTile : TableLayoutPanel
     private const nint PBST_PAUSED = 3;
 
     private readonly Label _caption = new() { AutoSize = true, Margin = new Padding(0) };
-    private readonly Label _value = new() { AutoSize = true, Text = "—", Margin = new Padding(0, 0, 0, Ui.SPACING / 2) };
+    private readonly Label _value = new() { AutoSize = true, Text = "—", Margin = new Padding(0, 0, 0, 2) };
     private readonly ProgressBar _bar = new() { Maximum = Ui.PERCENT_MAX, Dock = DockStyle.Top, Margin = new Padding(0), Visible = false };
 
     public MetricTile()
@@ -102,7 +102,7 @@ internal sealed class MetricTile : TableLayoutPanel
         ColumnCount = 1;
         RowCount = 3;
         Dock = DockStyle.Fill;
-        Margin = new Padding(0, 0, Ui.SPACING * 2, Ui.SPACING);
+        Margin = new Padding(0, 0, Ui.SPACING, 0);
         ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         RowStyles.Add(new RowStyle(SizeType.AutoSize));
         RowStyles.Add(new RowStyle(SizeType.AutoSize));

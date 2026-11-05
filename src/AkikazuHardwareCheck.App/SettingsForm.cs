@@ -106,7 +106,7 @@ internal sealed class SettingsForm : Form
     }
 
     /// <summary>The download is a single program file, so license texts travel inside it and open on request.</summary>
-    private static void OpenLicenses()
+    public static void OpenLicenses()
     {
         var folder = Path.Combine(Path.GetTempPath(), "AkikazuHardwareCheck-licenses");
         Directory.CreateDirectory(folder);

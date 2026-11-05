@@ -38,11 +38,36 @@ public static class AudioDeviceReader
     private const uint FRIENDLY_NAME_ID = 14;
     private const uint ENUMERATOR_NAME_ID = 24;
 
+    // What Windows calls an endpoint in the languages drivers commonly install under.
+    private static readonly string[] GenericEndpointKinds =
+    [
+        "Speaker", "Headphone", "Headset", "Microphone", "Mic", "Line In", "扬声器", "耳机", "麦克风", "揚聲器", "喇叭", "耳機", "麥克風",
+        "スピーカー", "ヘッドホン", "ヘッドフォン", "ヘッドセット", "マイク", "스피커", "헤드폰", "헤드셋", "마이크", "Lautsprecher", "Kopfhörer", "Mikrofon", "Haut-parleur", "Casque",
+    ];
+
     // Buses real audio hardware sits on. Virtual cables and capture software register under ROOT or software buses instead.
     private static readonly HashSet<string> PhysicalBuses = new(StringComparer.OrdinalIgnoreCase)
     {
         "HDAUDIO", "INTELAUDIO", "USB", "PCI", "ACPI", "BTHENUM", "BTHHFENUM", "BTHLEDEVICE",
     };
+
+    /// <summary>
+    /// Windows names an endpoint "Speakers (Realtek Audio)" in whatever language the driver was installed under, so a Chinese
+    /// system can say スピーカー. The row label already says what it is, so only the name in brackets is kept.
+    /// </summary>
+    public static string CleanEndpointName(string name)
+    {
+        var open = name.IndexOf('(', StringComparison.Ordinal);
+        if (open <= 0 || !name.EndsWith(')'))
+        {
+            return name;
+        }
+
+        var kind = name[..open].Trim();
+        return GenericEndpointKinds.Any(generic => kind.StartsWith(generic, StringComparison.OrdinalIgnoreCase))
+            ? name[(open + 1)..^1].Trim()
+            : name;
+    }
 
     public static AudioDevice? ReadSpeaker() => Read(DATA_FLOW_RENDER);
 
@@ -78,7 +103,7 @@ public static class AudioDeviceReader
             var chosen = Choose(ReadDefault(enumerator, dataFlow), ReadActive(enumerator, dataFlow), qualifies);
             return chosen is null
                 ? null
-                : new AudioDevice(PeripheralCollector.CleanName(chosen.Name) ?? chosen.Name, IsBluetoothBus(chosen.Bus));
+                : new AudioDevice(PeripheralCollector.CleanName(CleanEndpointName(chosen.Name)) ?? chosen.Name, IsBluetoothBus(chosen.Bus));
         }
         finally
         {

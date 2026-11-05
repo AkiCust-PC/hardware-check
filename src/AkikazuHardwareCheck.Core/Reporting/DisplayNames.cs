@@ -6,6 +6,24 @@ namespace AkikazuHardwareCheck.Core.Reporting;
 /// <summary>Turns raw hardware strings into the short names staff and customers read. Raw values stay in the JSON record.</summary>
 public static partial class DisplayNames
 {
+    /// <summary>Firmware often repeats the brand or model, as in "ASUS ASUS TUF Dash F15 FX517ZR_FX517ZR". Each word is kept once.</summary>
+    public static string ComputerName(string? brand, string? model)
+    {
+        var words = $"{brand} {model}".Split([' ', '_'], StringSplitOptions.RemoveEmptyEntries);
+        return string.Join(" ", words.Distinct(StringComparer.OrdinalIgnoreCase));
+    }
+
+    /// <summary>The encoding older programs use on this system, by its usual name.</summary>
+    public static string EncodingName(int codePage) => codePage switch
+    {
+        65001 => "UTF-8",
+        936 => "GBK",
+        932 => "Shift-JIS",
+        950 => "Big5",
+        949 => "EUC-KR",
+        _ => $"Windows-{codePage.ToString(CultureInfo.InvariantCulture)}",
+    };
+
     private const double BYTES_PER_GIB = 1024d * 1024 * 1024;
     private const double BYTES_PER_GB = 1000d * 1000 * 1000;
     private const double GB_PER_TB = 1000;

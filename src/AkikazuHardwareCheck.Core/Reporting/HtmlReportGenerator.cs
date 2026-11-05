@@ -50,7 +50,7 @@ public sealed class HtmlReportGenerator(Translator t)
         $"<tr>{string.Concat(encodedCells.Select(cell => $"<td>{cell}</td>"))}</tr>";
 
     private string HardwareRows(HardwareInventory hardware) =>
-        string.Concat(HardwareSummary.Lines(t, hardware).Concat(HardwareSummary.HistoryLines(t, hardware)).Select(line => Row(Encode(line.Label), Encode(line.Value))));
+        string.Concat(HardwareSummary.Lines(t, hardware).Concat(HardwareSummary.HistoryLines(t, hardware)).Select(line => Row(Encode(line.Label), Encode(line.Value).Replace(Environment.NewLine, "<br>", StringComparison.Ordinal))));
 
     private string CoolingText(CheckReport report)
     {
@@ -69,7 +69,7 @@ public sealed class HtmlReportGenerator(Translator t)
         var target = report.Hardware.Gpus.FirstOrDefault(gpu => gpu.Model == run.Phases.FirstOrDefault(phase => phase.TargetDevice is not null)?.TargetDevice);
         var rows = TemperatureSummary.Build(run, target).Where(row => row.State != TemperatureRowState.Unavailable).Select(row =>
         {
-            var device = row.IsCpu ? "CPU" : "GPU";
+            var device = Encode(t[row.IsCpu ? "section.cpu" : "section.gpu"]);
             var condition = EnumText.Key("report.condition", row.Phase);
             return row.State == TemperatureRowState.Measured
                 ? Row(device, Encode(t[condition]), Celsius(row.Minimum), Celsius(row.Maximum), Celsius(row.Average))

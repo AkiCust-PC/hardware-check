@@ -193,6 +193,41 @@ public class MonitoringTests
     }
 
     [Fact]
+    public void LiveVoltageClockAndFansUseWhatCanBeRead()
+    {
+        SensorReading Sensor(string type, string hardware, string name, double? value, string hardwareName = "CPU") =>
+            new($"/{hardware}", hardwareName, hardware, $"/{hardware}/{type}/{name}", name, type, value, "", value is null ? SensorStatus.NoValue : SensorStatus.Ok, "test", DateTimeOffset.UnixEpoch);
+
+        SensorReading[] desktop =
+        [
+            Sensor("Voltage", "Cpu", "CPU Core", 1.25),
+            Sensor("Clock", "Cpu", "P-Core #1", 5200),
+            Sensor("Clock", "Cpu", "E-Core #1", 4400),
+            Sensor("Clock", "Cpu", "Bus Speed", 100),
+            Sensor("Clock", "GpuNvidia", "GPU Core", 2500, "RTX"),
+            Sensor("Voltage", "GpuNvidia", "GPU Core", 1.05, "RTX"),
+            Sensor("Fan", "SuperIO", "CPU Fan", 1100),
+            Sensor("Fan", "SuperIO", "AIO Pump", 2800),
+            Sensor("Fan", "SuperIO", "Chassis Fan #1", 900),
+            Sensor("Fan", "SuperIO", "Fan #2", 0),
+            Sensor("Fan", "GpuNvidia", "GPU Fan", 0, "RTX"),
+        ];
+
+        Assert.Equal(1.25, SensorSelector.CpuVoltage(desktop));
+        Assert.Equal(5200, SensorSelector.CpuClock(desktop));
+        Assert.Equal(2500, SensorSelector.GpuClock(desktop, "RTX"));
+        Assert.Equal(1.05, SensorSelector.GpuVoltage(desktop, "RTX"));
+        Assert.Equal(new FanSpeeds(1100, 2800, 0, 900), SensorSelector.Fans(desktop));
+
+        // Laptop controllers name both fans, and unread clocks read 0.
+        SensorReading[] laptop = [Sensor("Fan", "EmbeddedController", "CPU Fan", 3100), Sensor("Fan", "EmbeddedController", "GPU Fan", 2900), Sensor("Clock", "Cpu", "Core #1", 0)];
+        Assert.Equal(new FanSpeeds(3100, null, 2900, null), SensorSelector.Fans(laptop));
+        Assert.Null(SensorSelector.CpuClock(laptop));
+
+        Assert.Equal(new FanSpeeds(null, null, null, null), SensorSelector.Fans([]));
+    }
+
+    [Fact]
     public void OnlyRealGraphicsCardsAreStressTargets()
     {
         GpuInfo[] gpus =

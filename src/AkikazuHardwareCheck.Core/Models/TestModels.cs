@@ -154,4 +154,5 @@ public sealed record TestProgress(
     double? CpuTemperature,
     double? GpuTemperature,
     double? CpuLoad,
-    double? GpuLoad);
+    double? GpuLoad,
+    IReadOnlyList<SensorReading>? Readings = null);

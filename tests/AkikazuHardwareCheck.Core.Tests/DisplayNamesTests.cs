@@ -131,6 +131,107 @@ public class DisplayNamesTests
         Assert.DoesNotContain(lines, line => line.Label is "麦克风" or "摄像头" or "打印机");
     }
 
+    [Theory]
+    [InlineData("ASUS", "ASUS TUF Dash F15 FX517ZR FX517ZR", "ASUS TUF Dash F15 FX517ZR")]
+    [InlineData("ASUS", "ASUS TUF Dash F15 FX517ZR_FX517ZR", "ASUS TUF Dash F15 FX517ZR")]
+    [InlineData("Dell", "OptiPlex 7010", "Dell OptiPlex 7010")]
+    [InlineData(null, "ThinkPad", "ThinkPad")]
+    public void ComputerNamesKeepEachWordOnce(string? brand, string model, string expected)
+    {
+        Assert.Equal(expected, DisplayNames.ComputerName(brand, model));
+    }
+
+    [Fact]
+    public void ComputerRowSaysWhatKindOfComputerItIs()
+    {
+        var laptop = HardwareSummary.Lines(Chinese, Hardware() with { Computer = new ComputerInfo("ASUS", "ASUS TUF Dash F15 FX517ZR FX517ZR", true) });
+        var desktop = HardwareSummary.Lines(Chinese, Hardware() with { Computer = new ComputerInfo("Dell", "OptiPlex 7010", false) });
+        var unnamed = HardwareSummary.Lines(Chinese, Hardware() with { Computer = new ComputerInfo(null, null, true) });
+
+        Assert.Equal("ASUS TUF Dash F15 FX517ZR", laptop.Single(line => line.Label == "笔记本电脑").Value);
+        Assert.Equal("Dell OptiPlex 7010", desktop.Single(line => line.Label == "台式电脑").Value);
+        Assert.DoesNotContain(unnamed, line => line.Label == "笔记本电脑");
+    }
+
+    [Fact]
+    public void BuiltInDisplayWithoutANameReadsNaturally()
+    {
+        var screen = new DisplayInfo(null, null, null, null, 1920, 1080, 60, 15.3, "Internal", true, null);
+
+        var value = HardwareSummary.Lines(Chinese, Hardware() with { Displays = [screen] }).Single(line => line.Label == "显示器").Value;
+
+        Assert.Equal("1920 × 1080 60Hz 15.3英寸 内置屏幕", value);
+    }
+
+    [Fact]
+    public void NothingUnreadShowsTheWordsForIt()
+    {
+        var sparse = Hardware() with
+        {
+            Cpus = [new CpuInfo(null, "Ryzen 7", null, null, null)],
+            Gpus = [new GpuInfo(null, null, null, null, GpuKind.Discrete, "0:1")],
+            Motherboard = new MotherboardInfo(null, null, null, null),
+            Disks = [new DiskInfo("0", null, null, null, null, null, false)],
+            Displays = [new DisplayInfo(null, null, null, null, null, null, null, null, null, false, null)],
+        };
+
+        Assert.DoesNotContain(HardwareSummary.Lines(Chinese, sparse), line => line.Value.Contains(Chinese["common.unavailable"]));
+    }
+
+    [Fact]
+    public void TwoDrivesShareOneLabelAndKeepTheirOwnHealth()
+    {
+        DiskInfo Disk(string id, string model) => new(id, model, 1_000_000_000_000, "SSD", "NVMe", "Healthy", id == "0");
+        DiskHealth Health(string id, int life) => new(id, null, DiskHealthStatus.Good, life, null, null, null, null, null, null, null, null, null, null, null, null, null, []);
+        var hardware = Hardware() with { Disks = [Disk("0", "Alpha"), Disk("1", "Beta")], DiskHealth = [Health("1", 80), Health("0", 99)] };
+
+        var lines = HardwareSummary.Lines(Chinese, hardware);
+        var rows = lines.Single(line => line.Label == "硬盘").Value.Split(Environment.NewLine);
+
+        Assert.DoesNotContain(lines, line => line.Label == "硬盘健康");
+        Assert.Equal(4, rows.Length);
+        Assert.Contains("Alpha", rows[0]);
+        Assert.StartsWith("良好 99%", rows[1]);
+        Assert.Contains("Beta", rows[2]);
+        Assert.StartsWith("良好 80%", rows[3]);
+    }
+
+    [Theory]
+    [InlineData("スピーカー (Realtek(R) Audio)", "Realtek(R) Audio")]
+    [InlineData("マイク配列 (Realtek(R) Audio)", "Realtek(R) Audio")]
+    [InlineData("Speakers (Logitech G733)", "Logitech G733")]
+    [InlineData("扬声器 (Realtek Audio)", "Realtek Audio")]
+    [InlineData("LG Ultra HD (Intel Display Audio)", "LG Ultra HD (Intel Display Audio)")]
+    [InlineData("ROG Headset", "ROG Headset")]
+    public void GenericEndpointKindsGiveWayToTheDeviceName(string name, string expected)
+    {
+        Assert.Equal(expected, AudioDeviceReader.CleanEndpointName(name));
+    }
+
+    [Theory]
+    [InlineData(936, "GBK")]
+    [InlineData(932, "Shift-JIS")]
+    [InlineData(65001, "UTF-8")]
+    [InlineData(1252, "Windows-1252")]
+    public void SystemEncodingsHaveTheirUsualNames(int codePage, string expected)
+    {
+        Assert.Equal(expected, DisplayNames.EncodingName(codePage));
+    }
+
+    [Fact]
+    public void ChineseTitlesSayProcessorAndGraphicsCard()
+    {
+        foreach (var language in new[] { AppLanguage.SIMPLIFIED_CHINESE, AppLanguage.TRADITIONAL_CHINESE })
+        {
+            var t = Translator.Load(language);
+            foreach (var key in t.Keys.Where(key => key.StartsWith("ui.", StringComparison.Ordinal) || key.StartsWith("phase.", StringComparison.Ordinal) || key.StartsWith("metric.", StringComparison.Ordinal)))
+            {
+                Assert.DoesNotContain("CPU", t[key]);
+                Assert.DoesNotContain("GPU", t[key]);
+            }
+        }
+    }
+
     private static AudioCandidate Audio(string name, string? bus, uint? formFactor) => new(name, bus, formFactor);
 
     [Theory]
@@ -262,7 +363,7 @@ public class DisplayNamesTests
             Battery = new BatteryInfo(52000, 45240, ComputerCollector.HealthPercent(52000, 45240)),
         };
 
-        Assert.Equal("笔记本 HP EliteBook 840 G9", Value(hardware, "整机"));
+        Assert.Equal("HP EliteBook 840 G9", Value(hardware, "笔记本电脑"));
         Assert.Equal("健康度 87%（当前 45.2Wh / 设计 52Wh）", Value(hardware, "电池"));
         Assert.DoesNotContain(HardwareSummary.Lines(Chinese, hardware, isFull: false), line => line.Label == "电池");
     }

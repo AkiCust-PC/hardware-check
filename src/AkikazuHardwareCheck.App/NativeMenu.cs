@@ -12,10 +12,16 @@ internal enum MenuCommand
     RestartToFirmware,
     BackgroundColor,
     BackgroundImage,
-    BackgroundRotate,
-    BackgroundMirrorHorizontal,
-    BackgroundMirrorVertical,
+    BackgroundAdjust,
     BackgroundReset,
+    Reload,
+    Exit,
+    ShowHardware,
+    ShowTests,
+    AlwaysOnTop,
+    Guide,
+    Updates,
+    About,
     FirstLanguage = 100,
 }
 
@@ -28,6 +34,7 @@ internal sealed class NativeMenu
     private const uint MF_BYCOMMAND = 0x0000;
     private const uint MF_STRING = 0x0000;
     private const uint MF_GRAYED = 0x0001;
+    private const uint MF_CHECKED = 0x0008;
     private const uint MF_POPUP = 0x0010;
     private const uint MF_SEPARATOR = 0x0800;
 
@@ -48,6 +55,9 @@ internal sealed class NativeMenu
 
     public void SetEnabled(MenuCommand command, bool isEnabled) =>
         EnableMenuItem(_bar, (uint)command, MF_BYCOMMAND | (isEnabled ? MF_STRING : MF_GRAYED));
+
+    public void SetChecked(MenuCommand command, bool isChecked) =>
+        CheckMenuItem(_bar, (uint)command, MF_BYCOMMAND | (isChecked ? MF_CHECKED : MF_STRING));
 
     public void SetRadio(MenuCommand first, int count, MenuCommand chosen) =>
         CheckMenuRadioItem(_bar, (uint)first, (uint)first + (uint)count - 1, (uint)chosen, MF_BYCOMMAND);
@@ -80,6 +90,9 @@ internal sealed class NativeMenu
 
     [DllImport("user32.dll")]
     private static extern bool DestroyMenu(IntPtr menu);
+
+    [DllImport("user32.dll")]
+    private static extern uint CheckMenuItem(IntPtr menu, uint id, uint flags);
 
     [DllImport("user32.dll")]
     private static extern int EnableMenuItem(IntPtr menu, uint id, uint flags);

@@ -30,6 +30,7 @@ internal sealed class MainForm : Form
     ];
 
     private const int MONITOR_SECTION_HEIGHT = 205;
+    private const int METRIC_ROW_HEIGHT = 46;
     private const int CONTROL_SECTION_HEIGHT = 200;
 
     // Without the graphics card selector row.
@@ -61,6 +62,14 @@ internal sealed class MainForm : Form
     private readonly MetricTile _gpuLoadTile = new();
     private readonly MetricTile _memoryLoadTile = new();
     private readonly MetricTile _diskLoadTile = new();
+    private readonly MetricTile _cpuVoltageTile = new();
+    private readonly MetricTile _cpuClockTile = new();
+    private readonly MetricTile _gpuVoltageTile = new();
+    private readonly MetricTile _gpuClockTile = new();
+    private readonly MetricTile _cpuFanTile = new();
+    private readonly MetricTile _pumpTile = new();
+    private readonly MetricTile _gpuFanTile = new();
+    private readonly MetricTile _caseFanTile = new();
     private readonly MetricTile _uploadTile = new();
     private readonly MetricTile _downloadTile = new();
 
@@ -87,6 +96,9 @@ internal sealed class MainForm : Form
 
     private readonly System.Windows.Forms.Timer _clockTimer = new() { Interval = CLOCK_INTERVAL_MS };
     private TableLayoutPanel? _rootPanel;
+    private TableLayoutPanel? _bodyPanel;
+    private TableLayoutPanel? _monitorPanel;
+    private string? _visibleFans;
     private Bitmap? _backgroundSource;
     private Size _backgroundSize;
     private bool _isResizing;
@@ -135,6 +147,8 @@ internal sealed class MainForm : Form
         WireEvents();
         ApplyBackground();
         ApplyLanguage();
+        ApplyPanels();
+        TopMost = _settings.IsAlwaysOnTop;
     }
 
     private bool IsTestRunning => _testStop is not null;
@@ -293,7 +307,7 @@ internal sealed class MainForm : Form
         _monitorGroup = Ui.Section(_phaseLabel, BuildMonitorPanel());
         _controlGroup = Ui.Section(null, BuildControlPanel());
         _detailsButton.Margin = new Padding(0, 0, 0, Ui.SPACING / 2);
-        _resultGroup = Ui.Section(_detailsButton, BuildResultPanel());
+        _resultGroup = Ui.Section(null, BuildResultPanel());
 
         _rightPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         _rightPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(MONITOR_SECTION_HEIGHT)));
@@ -311,28 +325,36 @@ internal sealed class MainForm : Form
         body.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         body.Controls.Add(_hardwareGroup, 0, 0);
         body.Controls.Add(_rightPanel, 1, 0);
+        _bodyPanel = body;
         return body;
     }
 
     private TableLayoutPanel BuildMonitorPanel()
     {
-        var panel = new TableLayoutPanel { ColumnCount = 4, RowCount = 3, Margin = new Padding(0) };
+        var panel = new TableLayoutPanel { ColumnCount = 4, RowCount = 5, Margin = new Padding(0) };
         for (var column = 0; column < panel.ColumnCount; column++)
         {
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
         }
 
         panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        for (var row = 0; row < 3; row++)
+        {
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(METRIC_ROW_HEIGHT)));
+        }
+
+        // The fan row appears only when at least one fan can be read.
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));
         _progressBar.Height = LogicalToDeviceUnits(Ui.SPACING);
         panel.Controls.Add(_progressBar, 0, 0);
         panel.SetColumnSpan(_progressBar, 4);
 
         MetricTile[][] rows =
         [
-            [_cpuTemperatureTile, _cpuLoadTile, _gpuTemperatureTile, _gpuLoadTile],
+            [_cpuTemperatureTile, _cpuLoadTile, _cpuVoltageTile, _cpuClockTile],
+            [_gpuTemperatureTile, _gpuLoadTile, _gpuVoltageTile, _gpuClockTile],
             [_memoryLoadTile, _diskLoadTile, _uploadTile, _downloadTile],
+            [_cpuFanTile, _pumpTile, _gpuFanTile, _caseFanTile],
         ];
         for (var row = 0; row < rows.Length; row++)
         {
@@ -342,6 +364,7 @@ internal sealed class MainForm : Form
             }
         }
 
+        _monitorPanel = panel;
         return panel;
     }
 
@@ -375,13 +398,17 @@ internal sealed class MainForm : Form
 
     private TableLayoutPanel BuildResultPanel()
     {
-        var panel = new TableLayoutPanel { ColumnCount = 1, RowCount = 2, Margin = new Padding(0) };
+        // The overall result and the details button share a row, leaving the rest of the area to the list.
+        var panel = new TableLayoutPanel { ColumnCount = 2, RowCount = 2, Margin = new Padding(0) };
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         panel.Controls.Add(_overallLabel, 0, 0);
+        panel.Controls.Add(_detailsButton, 1, 0);
         _resultList.Dock = DockStyle.Fill;
         panel.Controls.Add(_resultList, 0, 1);
+        panel.SetColumnSpan(_resultList, 2);
         return panel;
     }
 
@@ -467,17 +494,20 @@ internal sealed class MainForm : Form
         NativeMenu.AddItem(file, MenuCommand.OpenReport, _t["ui.openReport"]);
         NativeMenu.AddItem(file, MenuCommand.OpenFolder, _t["ui.openFolder"]);
         NativeMenu.AddSeparator(file);
+        NativeMenu.AddItem(file, MenuCommand.Reload, _t["ui.reload"]);
         NativeMenu.AddItem(file, MenuCommand.RestartToFirmware, _t["ui.restartToFirmware"]);
         NativeMenu.AddItem(file, MenuCommand.Settings, _t["ui.settings"]);
+        NativeMenu.AddSeparator(file);
+        NativeMenu.AddItem(file, MenuCommand.Exit, _t["ui.exit"]);
 
         var view = menu.AddSubmenu(_t["ui.menuView"]);
+        NativeMenu.AddItem(view, MenuCommand.ShowHardware, _t["ui.showHardware"]);
+        NativeMenu.AddItem(view, MenuCommand.ShowTests, _t["ui.showTests"]);
+        NativeMenu.AddItem(view, MenuCommand.AlwaysOnTop, _t["ui.alwaysOnTop"]);
+        NativeMenu.AddSeparator(view);
         NativeMenu.AddItem(view, MenuCommand.BackgroundColor, _t["ui.backgroundColor"]);
         NativeMenu.AddItem(view, MenuCommand.BackgroundImage, _t["ui.backgroundImage"]);
-        NativeMenu.AddSeparator(view);
-        NativeMenu.AddItem(view, MenuCommand.BackgroundRotate, _t["ui.backgroundRotate"]);
-        NativeMenu.AddItem(view, MenuCommand.BackgroundMirrorHorizontal, _t["ui.backgroundMirrorH"]);
-        NativeMenu.AddItem(view, MenuCommand.BackgroundMirrorVertical, _t["ui.backgroundMirrorV"]);
-        NativeMenu.AddSeparator(view);
+        NativeMenu.AddItem(view, MenuCommand.BackgroundAdjust, _t["ui.backgroundAdjust"]);
         NativeMenu.AddItem(view, MenuCommand.BackgroundReset, _t["ui.backgroundReset"]);
 
         var language = menu.AddSubmenu(_t["ui.menuLanguage"]);
@@ -485,6 +515,12 @@ internal sealed class MainForm : Form
         {
             NativeMenu.AddItem(language, MenuCommand.FirstLanguage + index, LanguageChoices[index].Name);
         }
+
+        var help = menu.AddSubmenu(_t["ui.menuHelp"]);
+        NativeMenu.AddItem(help, MenuCommand.Guide, _t["ui.guide"]);
+        NativeMenu.AddItem(help, MenuCommand.Updates, _t["ui.updates"]);
+        NativeMenu.AddSeparator(help);
+        NativeMenu.AddItem(help, MenuCommand.About, _t["ui.about"]);
 
         menu.SetRadio(MenuCommand.FirstLanguage, LanguageChoices.Length, MenuCommand.FirstLanguage + Array.FindIndex(LanguageChoices, choice => choice.Code == _t.Language));
         menu.Attach(Handle, _menu);
@@ -523,17 +559,44 @@ internal sealed class MainForm : Form
             case MenuCommand.BackgroundImage:
                 ChooseBackgroundImage();
                 break;
-            case MenuCommand.BackgroundRotate:
-                ChangeBackgroundTransform(transform => transform.RotateClockwise());
-                break;
-            case MenuCommand.BackgroundMirrorHorizontal:
-                ChangeBackgroundTransform(transform => transform.MirrorHorizontally());
-                break;
-            case MenuCommand.BackgroundMirrorVertical:
-                ChangeBackgroundTransform(transform => transform.MirrorVertically());
+            case MenuCommand.BackgroundAdjust:
+                AdjustBackground();
                 break;
             case MenuCommand.BackgroundReset:
-                ChangeBackground(_settings with { BackgroundColorArgb = null, BackgroundImagePath = null, BackgroundRotationDegrees = 0, IsBackgroundMirrored = false });
+                ChangeBackground(WithDefaultPicturePlacement(_settings) with { BackgroundColorArgb = null, BackgroundImagePath = null });
+                break;
+            case MenuCommand.Reload:
+                _ = ReloadHardwareAsync();
+                break;
+            case MenuCommand.Exit:
+                Close();
+                break;
+            case MenuCommand.ShowHardware:
+                // One side always stays, so the window is never left empty.
+                SaveSettings(_settings with { IsHardwarePanelHidden = !_settings.IsHardwarePanelHidden, IsTestPanelHidden = !_settings.IsHardwarePanelHidden && _settings.IsTestPanelHidden ? false : _settings.IsTestPanelHidden });
+                ApplyPanels();
+                break;
+            case MenuCommand.ShowTests:
+                SaveSettings(_settings with { IsTestPanelHidden = !_settings.IsTestPanelHidden, IsHardwarePanelHidden = !_settings.IsTestPanelHidden && _settings.IsHardwarePanelHidden ? false : _settings.IsHardwarePanelHidden });
+                ApplyPanels();
+                break;
+            case MenuCommand.AlwaysOnTop:
+                SaveSettings(_settings with { IsAlwaysOnTop = !_settings.IsAlwaysOnTop });
+                TopMost = _settings.IsAlwaysOnTop;
+                UpdateCommandStates();
+                break;
+            case MenuCommand.Guide:
+                OpenInShell($"{AboutForm.REPOSITORY}#readme");
+                break;
+            case MenuCommand.Updates:
+                OpenInShell($"{AboutForm.REPOSITORY}/releases/latest");
+                break;
+            case MenuCommand.About:
+                using (var about = new AboutForm(_t, Font))
+                {
+                    about.ShowDialog(this);
+                }
+
                 break;
             case MenuCommand.Settings:
                 OpenSettingsForm();
@@ -542,8 +605,8 @@ internal sealed class MainForm : Form
     }
 
     /// <summary>
-    /// Secure Boot can only be switched inside the firmware: Windows has no general interface to turn it on, by design.
-    /// This is the closest thing to one click, so it restarts straight into the firmware screen after showing what to change.
+    /// Restarts straight into the firmware screen. Secure Boot can only be switched there, because Windows has no general
+    /// interface for it, so the confirmation also says what to change.
     /// </summary>
     private void RestartToFirmware()
     {
@@ -574,6 +637,69 @@ internal sealed class MainForm : Form
         // Rebuilds the lists and captions in the text color that suits the new background.
         ApplyLanguage();
     }
+
+    private void ApplyPanels()
+    {
+        if (_bodyPanel is not { } body || _hardwareGroup is not { } hardware)
+        {
+            return;
+        }
+
+        var showsHardware = !_settings.IsHardwarePanelHidden;
+        var showsTests = !_settings.IsTestPanelHidden;
+        hardware.Visible = showsHardware;
+        _rightPanel.Visible = showsTests;
+        body.ColumnStyles[0].Width = !showsHardware ? 0 : showsTests ? 50 : 100;
+        body.ColumnStyles[1].Width = !showsTests ? 0 : showsHardware ? 50 : 100;
+        UpdateCommandStates();
+    }
+
+    private async Task ReloadHardwareAsync()
+    {
+        if (IsTestRunning || _hardware is null)
+        {
+            return;
+        }
+
+        _hardware = await Task.Run(HardwareInfoService.Read);
+        FillTargetBox();
+        RenderHardware();
+        UpdateCommandStates();
+    }
+
+    private void AdjustBackground()
+    {
+        if (_backgroundSource is not { } source)
+        {
+            return;
+        }
+
+        var transform = new BackgroundTransform(_settings.BackgroundRotationDegrees, _settings.IsBackgroundMirrored);
+        var view = new BackgroundView(_settings.BackgroundZoom, _settings.BackgroundPanX, _settings.BackgroundPanY);
+        using var form = new BackgroundAdjustForm(_t, source, transform, view, ClientSize, Font);
+        if (form.ShowDialog(this) == DialogResult.OK)
+        {
+            SaveSettings(_settings with
+            {
+                BackgroundRotationDegrees = form.Transform.RotationDegrees,
+                IsBackgroundMirrored = form.Transform.IsMirrored,
+                BackgroundZoom = form.View.Zoom,
+                BackgroundPanX = form.View.PanX,
+                BackgroundPanY = form.View.PanY,
+            });
+            _backgroundSize = Size.Empty;
+            RenderBackground();
+        }
+    }
+
+    private static AppSettings WithDefaultPicturePlacement(AppSettings settings) => settings with
+    {
+        BackgroundRotationDegrees = 0,
+        IsBackgroundMirrored = false,
+        BackgroundZoom = BackgroundView.Default.Zoom,
+        BackgroundPanX = BackgroundView.Default.PanX,
+        BackgroundPanY = BackgroundView.Default.PanY,
+    };
 
     private void ApplyBackground()
     {
@@ -622,14 +748,11 @@ internal sealed class MainForm : Form
             return;
         }
 
-        using var turned = (Bitmap)source.Clone();
-        turned.RotateFlip(ToRotateFlip(new BackgroundTransform(_settings.BackgroundRotationDegrees, _settings.IsBackgroundMirrored)));
-        var fit = BackgroundTransform.Cover(turned.Width, turned.Height, area.Width, area.Height);
+        using var turned = BackgroundPainter.Turn(source, new BackgroundTransform(_settings.BackgroundRotationDegrees, _settings.IsBackgroundMirrored));
         var frame = new Bitmap(area.Width, area.Height);
         using (var graphics = Graphics.FromImage(frame))
         {
-            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            graphics.DrawImage(turned, fit.X, fit.Y, fit.Width, fit.Height);
+            BackgroundPainter.Paint(graphics, turned, area, new BackgroundView(_settings.BackgroundZoom, _settings.BackgroundPanX, _settings.BackgroundPanY), InterpolationMode.HighQualityBicubic);
         }
 
         var replaced = BackgroundImage;
@@ -643,25 +766,13 @@ internal sealed class MainForm : Form
         }
     }
 
-    private static RotateFlipType ToRotateFlip(BackgroundTransform transform) => (transform.RotationDegrees, transform.IsMirrored) switch
-    {
-        (90, false) => RotateFlipType.Rotate90FlipNone,
-        (180, false) => RotateFlipType.Rotate180FlipNone,
-        (270, false) => RotateFlipType.Rotate270FlipNone,
-        (0, true) => RotateFlipType.RotateNoneFlipX,
-        (90, true) => RotateFlipType.Rotate90FlipX,
-        (180, true) => RotateFlipType.Rotate180FlipX,
-        (270, true) => RotateFlipType.Rotate270FlipX,
-        _ => RotateFlipType.RotateNoneFlipNone,
-    };
-
     private void ChooseBackgroundColor()
     {
         using var dialog = new ColorDialog { Color = BackColor, FullOpen = true };
         if (dialog.ShowDialog(this) == DialogResult.OK)
         {
             // A color replaces the picture, which would otherwise hide it completely.
-            ChangeBackground(_settings with { BackgroundColorArgb = dialog.Color.ToArgb(), BackgroundImagePath = null, BackgroundRotationDegrees = 0, IsBackgroundMirrored = false });
+            ChangeBackground(WithDefaultPicturePlacement(_settings) with { BackgroundColorArgb = dialog.Color.ToArgb(), BackgroundImagePath = null });
         }
     }
 
@@ -670,21 +781,8 @@ internal sealed class MainForm : Form
         using var dialog = new OpenFileDialog { Filter = _t["ui.backgroundFilter"], Title = _t["ui.backgroundImage"].TrimEnd('…') };
         if (dialog.ShowDialog(this) == DialogResult.OK)
         {
-            ChangeBackground(_settings with { BackgroundImagePath = dialog.FileName, BackgroundRotationDegrees = 0, IsBackgroundMirrored = false });
+            ChangeBackground(WithDefaultPicturePlacement(_settings) with { BackgroundImagePath = dialog.FileName });
         }
-    }
-
-    private void ChangeBackgroundTransform(Func<BackgroundTransform, BackgroundTransform> change)
-    {
-        if (_backgroundSource is null)
-        {
-            return;
-        }
-
-        var changed = change(new BackgroundTransform(_settings.BackgroundRotationDegrees, _settings.IsBackgroundMirrored));
-        SaveSettings(_settings with { BackgroundRotationDegrees = changed.RotationDegrees, IsBackgroundMirrored = changed.IsMirrored });
-        _backgroundSize = Size.Empty;
-        RenderBackground();
     }
 
     private void OnLanguageChosen(string code)
@@ -730,6 +828,14 @@ internal sealed class MainForm : Form
         _cpuLoadTile.SetCaption(_t["ui.cpuLoad"]);
         _gpuTemperatureTile.SetCaption(_t["ui.gpuTemperature"]);
         _gpuLoadTile.SetCaption(_t["ui.gpuLoad"]);
+        _cpuVoltageTile.SetCaption(_t["ui.cpuVoltage"]);
+        _cpuClockTile.SetCaption(_t["ui.cpuClock"]);
+        _gpuVoltageTile.SetCaption(_t["ui.gpuVoltage"]);
+        _gpuClockTile.SetCaption(_t["ui.gpuClock"]);
+        _cpuFanTile.SetCaption(_t["ui.fanCpu"]);
+        _pumpTile.SetCaption(_t["ui.fanPump"]);
+        _gpuFanTile.SetCaption(_t["ui.fanGpu"]);
+        _caseFanTile.SetCaption(_t["ui.fanCase"]);
         _memoryLoadTile.SetCaption(_t["ui.memoryLoad"]);
         _diskLoadTile.SetCaption(_t["ui.diskLoad"]);
         _uploadTile.SetCaption(_t["ui.upload"]);
@@ -906,12 +1012,10 @@ internal sealed class MainForm : Form
             return;
         }
 
-        var driveHealth = new Queue<DiskHealth>((_hardware.DiskHealth ?? []).Where(health => health.Status != DiskHealthStatus.Unknown));
         var rows = new List<InfoRow>();
         foreach (var line in HardwareSummary.Lines(_t, _hardware, !_settings.IsModelsOnlyView))
         {
-            // Health lines come in drive order, so each one takes its color from the next drive.
-            var needsAttention = line.Label == _t["report.diskHealth"] && driveHealth.TryDequeue(out var health) && DiskHealthSummary.NeedsAttention(health);
+            var needsAttention = line.Label == _t["section.disks"] && (_hardware.DiskHealth ?? []).Any(DiskHealthSummary.NeedsAttention);
             rows.Add(new InfoRow(line.Label, line.Value, needsAttention ? Ui.AlertColor : null));
         }
 
@@ -1009,6 +1113,53 @@ internal sealed class MainForm : Form
     {
         var model = SelectedTarget()?.Model;
         ShowMetrics(SensorSelector.CpuTemperature(readings), SensorSelector.CpuLoad(readings), SensorSelector.GpuTemperature(readings, model), SensorSelector.GpuLoad(readings, model));
+        ShowPlain(_cpuVoltageTile, Format(SensorSelector.CpuVoltage(readings), "0.000", "V"));
+        ShowPlain(_cpuClockTile, Format(SensorSelector.CpuClock(readings), "0", "MHz"));
+        ShowPlain(_gpuVoltageTile, Format(SensorSelector.GpuVoltage(readings, model), "0.000", "V"));
+        ShowPlain(_gpuClockTile, Format(SensorSelector.GpuClock(readings, model), "0", "MHz"));
+        ShowFans(SensorSelector.Fans(readings));
+    }
+
+    private static void ShowPlain(MetricTile tile, string text) => tile.Show(text, null, MetricLevel.Normal);
+
+    /// <summary>Only fans that can be read get a tile. They fill the row from the left, and the row itself goes when there are none.</summary>
+    private void ShowFans(FanSpeeds fans)
+    {
+        (MetricTile Tile, double? Speed)[] tiles = [(_cpuFanTile, fans.Cpu), (_pumpTile, fans.Pump), (_gpuFanTile, fans.Gpu), (_caseFanTile, fans.Case)];
+        for (var index = 0; index < tiles.Length; index++)
+        {
+            tiles[index].Tile.Name = index.ToString(CultureInfo.InvariantCulture);
+        }
+
+        var shown = tiles.Where(item => item.Speed is not null).ToList();
+        foreach (var (tile, speed) in shown)
+        {
+            ShowPlain(tile, Format(speed, "0", "RPM"));
+        }
+
+        // Which fans can be read rarely changes, so the row is only rearranged when it does.
+        var visibleFans = string.Join(",", shown.Select(item => item.Tile.Name));
+        if (visibleFans == _visibleFans || _monitorPanel is not { } panel)
+        {
+            return;
+        }
+
+        _visibleFans = visibleFans;
+        panel.SuspendLayout();
+        foreach (var (tile, speed) in tiles)
+        {
+            tile.Visible = speed is not null;
+        }
+
+        for (var column = 0; column < shown.Count; column++)
+        {
+            panel.SetColumn(shown[column].Tile, column);
+        }
+
+        var fanRowHeight = shown.Count > 0 ? LogicalToDeviceUnits(METRIC_ROW_HEIGHT) : 0;
+        panel.RowStyles[panel.RowCount - 1].Height = fanRowHeight;
+        panel.ResumeLayout();
+        _rightPanel.RowStyles[0].Height = LogicalToDeviceUnits(MONITOR_SECTION_HEIGHT) + fanRowHeight;
     }
 
     private void ShowMetrics(double? cpuTemperature, double? cpuLoad, double? gpuTemperature, double? gpuLoad)
@@ -1220,7 +1371,10 @@ internal sealed class MainForm : Form
         var elapsed = Math.Min(progress.PhaseElapsedSeconds, progress.PhasePlannedSeconds);
         _phaseLabel.Text = _t["ui.phaseProgress", EnumText.Phase(_t, progress.Phase), Math.Round(elapsed), Math.Round(progress.PhasePlannedSeconds)];
         _progressBar.Value = progress.PhasePlannedSeconds > 0 ? (int)(elapsed / progress.PhasePlannedSeconds * PROGRESS_MAX) : 0;
-        ShowMetrics(progress.CpuTemperature, progress.CpuLoad, progress.GpuTemperature, progress.GpuLoad);
+        if (progress.Readings is { } readings)
+        {
+            UpdateLiveValues(readings);
+        }
     }
 
     private void RequestStop() => _testStop?.Cancel();
@@ -1249,13 +1403,12 @@ internal sealed class MainForm : Form
             menu.SetEnabled(MenuCommand.Copy, isReady);
             menu.SetEnabled(MenuCommand.OpenReport, _lastReport is not null);
             menu.SetEnabled(MenuCommand.Settings, !isRunning);
-            var hasPicture = _backgroundSource is not null;
-            menu.SetEnabled(MenuCommand.BackgroundRotate, hasPicture);
-            menu.SetEnabled(MenuCommand.BackgroundMirrorHorizontal, hasPicture);
-            menu.SetEnabled(MenuCommand.BackgroundMirrorVertical, hasPicture);
-
-            // Only a PC that booted through UEFI with Secure Boot off has anything to change there.
-            menu.SetEnabled(MenuCommand.RestartToFirmware, !isRunning && _hardware?.Security?.SecureBootEnabled == false);
+            menu.SetEnabled(MenuCommand.BackgroundAdjust, _backgroundSource is not null);
+            menu.SetEnabled(MenuCommand.Reload, isReady && !isRunning);
+            menu.SetChecked(MenuCommand.ShowHardware, !_settings.IsHardwarePanelHidden);
+            menu.SetChecked(MenuCommand.ShowTests, !_settings.IsTestPanelHidden);
+            menu.SetChecked(MenuCommand.AlwaysOnTop, _settings.IsAlwaysOnTop);
+            menu.SetEnabled(MenuCommand.RestartToFirmware, !isRunning);
             for (var index = 0; index < LanguageChoices.Length; index++)
             {
                 menu.SetEnabled(MenuCommand.FirstLanguage + index, !isRunning);
@@ -1300,7 +1453,7 @@ internal sealed class MainForm : Form
         {
             // The idle label needs the device name; the load labels already contain it.
             var condition = _t[EnumText.Key("report.condition", row.Phase)];
-            var label = row.Phase == TestPhase.Idle ? $"{(row.IsCpu ? "CPU" : "GPU")} {condition}" : condition;
+            var label = row.Phase == TestPhase.Idle ? $"{_t[row.IsCpu ? "section.cpu" : "section.gpu"]} {condition}" : condition;
             rows.Add(new InfoRow(label, TemperatureText(row)));
         }
 

@@ -15,6 +15,12 @@ namespace AkikazuHardwareCheck.Core.Configuration;
 /// <param name="BackgroundImagePath">The chosen background picture. Null shows no picture.</param>
 /// <param name="BackgroundRotationDegrees">Clockwise rotation of the picture.</param>
 /// <param name="IsBackgroundMirrored">Whether the picture is mirrored left to right after rotating.</param>
+/// <param name="BackgroundZoom">Picture size relative to just covering the window.</param>
+/// <param name="BackgroundPanX">Picture shift as a share of the window width.</param>
+/// <param name="BackgroundPanY">Picture shift as a share of the window height.</param>
+/// <param name="IsHardwarePanelHidden">Whether the hardware list is hidden.</param>
+/// <param name="IsTestPanelHidden">Whether the monitoring and test side is hidden.</param>
+/// <param name="IsAlwaysOnTop">Whether the window stays above others.</param>
 public sealed record AppSettings(
     string? Language = null,
     string? ReportFolder = null,
@@ -26,7 +32,13 @@ public sealed record AppSettings(
     int? BackgroundColorArgb = null,
     string? BackgroundImagePath = null,
     int BackgroundRotationDegrees = 0,
-    bool IsBackgroundMirrored = false)
+    bool IsBackgroundMirrored = false,
+    double BackgroundZoom = 1,
+    double BackgroundPanX = 0,
+    double BackgroundPanY = 0,
+    bool IsHardwarePanelHidden = false,
+    bool IsTestPanelHidden = false,
+    bool IsAlwaysOnTop = false)
 {
     private const string FOLDER_NAME = "AkikazuHardwareCheck";
 

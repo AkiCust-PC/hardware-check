@@ -29,6 +29,14 @@ public class BackgroundTests
     }
 
     [Fact]
+    public void ViewMovesAndResizesFromTheCoveringPosition()
+    {
+        Assert.Equal(new BackgroundFrame(0, 0, 800, 450), BackgroundView.Default.Place(1600, 900, 800, 450));
+        Assert.Equal(new BackgroundFrame(200, 112, 400, 225), new BackgroundView(0.5, 0, 0).Place(1600, 900, 800, 450));
+        Assert.Equal(new BackgroundFrame(80, -45, 800, 450), new BackgroundView(1, 0.1, -0.1).Place(1600, 900, 800, 450));
+    }
+
+    [Fact]
     public void TurnsAndMirrorsCombineLikeRealOnes()
     {
         var start = new BackgroundTransform(0, false);

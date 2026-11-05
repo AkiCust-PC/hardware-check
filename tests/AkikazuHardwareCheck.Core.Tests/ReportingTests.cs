@@ -137,6 +137,16 @@ public class ReportingTests
     }
 
     [Fact]
+    public void TwoDrivesKeepTheirOwnLinesInTheReport()
+    {
+        var hardware = Hardware() with { Disks = [new DiskInfo("0", "AlphaDisk", 1_000_000_000_000, "SSD", "NVMe", "Healthy", true), new DiskInfo("1", "BetaDisk", 1_000_000_000_000, "SSD", "NVMe", "Healthy", false)] };
+
+        var html = Html(Report() with { Hardware = hardware }, AppLanguage.SIMPLIFIED_CHINESE);
+
+        Assert.Matches("AlphaDisk[^<]*<br>[^<]*BetaDisk", html);
+    }
+
+    [Fact]
     public void AnomaliesAppearInTheReport()
     {
         var t = Translator.Load(AppLanguage.ENGLISH);
