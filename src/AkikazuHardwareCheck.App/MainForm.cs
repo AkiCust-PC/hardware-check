@@ -88,6 +88,7 @@ internal sealed class MainForm : Form
     private GroupBox? _resultGroup;
     private bool _isApplyingView;
     private bool _isDriverOurs;
+    private bool _isDriverPackageOurs;
     private AudioCheckResult _audioCheck = new(null, null);
 
     private AppSettings _settings = AppSettings.Load(AppSettings.DefaultSettingsPath);
@@ -213,9 +214,9 @@ internal sealed class MainForm : Form
         _sensorSource?.Dispose();
         if (_isDriverOurs)
         {
-            // Only a driver this run installed is removed. Hiding first keeps the short wait from looking like a hang.
-            Hide();
-            PawnIoSetup.Uninstall();
+            // Only a driver this run installed is removed. This process keeps the driver open until it ends, so a
+            // copy of the program does the removal after it, with this process's administrator rights.
+            StartDriverRemoval();
         }
 
         base.OnFormClosing(e);
@@ -401,6 +402,24 @@ internal sealed class MainForm : Form
         _micTestButton.Click += (_, _) => _ = RunMicrophoneTestAsync();
         Resize += (_, _) => FitMessages();
         _clockTimer.Tick += (_, _) => _hardwareList.UpdateValue(_t["summary.time"], HardwareSummary.TimeText(DateTimeOffset.Now, TimeZoneInfo.Local));
+    }
+
+    private void StartDriverRemoval()
+    {
+        if (Environment.ProcessPath is not { } path)
+        {
+            return;
+        }
+
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo(path, [Program.REMOVE_DRIVER_ARGUMENT, Environment.ProcessId.ToString(CultureInfo.InvariantCulture), _isDriverPackageOurs.ToString(), _t.Language]) { UseShellExecute = false });
+        }
+        catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
+        {
+            MessageBox.Show(_t["ui.driverRemoveFailed"], _t["ui.appName"], MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Trace.TraceWarning(exception.Message);
+        }
     }
 
     private void BuildMenu()
@@ -602,6 +621,7 @@ internal sealed class MainForm : Form
     {
         var outcome = await Task.Run(() => PawnIoSetup.Install(HardwareInfoService.IsAdministrator(), HardwareInfoService.IsPawnIoInstalled()));
         _isDriverOurs = outcome.Result is DriverSetupResult.Installed or DriverSetupResult.RebootRequired;
+        _isDriverPackageOurs = _isDriverOurs && !outcome.HadDriverBefore;
         switch (outcome.Result)
         {
             case DriverSetupResult.Failed:

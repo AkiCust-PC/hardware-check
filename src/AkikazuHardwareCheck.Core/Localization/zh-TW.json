@@ -238,6 +238,7 @@
   "ui.downloadPageUrl": "https://www.akikazu.co.jp/zh-TW/tools?tab=hardware",
   "ui.driverFailed": "感測器驅動程式安裝失敗（代碼 {0}）。其他功能不受影響。",
   "ui.driverReboot": "感測器驅動程式已安裝，重新開機後可讀取 CPU 溫度。",
+  "ui.driverRemoveFailed": "感測器驅動程式未能完全移除。它不會自動執行，也不影響使用；可在裝置管理員或重新執行本工具後再處理。",
   "ui.elevationFailed": "未能以系統管理員身分啟動：{0}",
   "ui.gpuLimit": "GPU 溫度保護（°C）",
   "ui.gpuLoad": "GPU 使用率",

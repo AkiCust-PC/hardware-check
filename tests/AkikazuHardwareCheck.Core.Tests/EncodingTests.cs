@@ -102,6 +102,30 @@ public class EncodingTests
         Assert.Equal(DriverSetupResult.NeedsAdministrator, PawnIoSetup.Install(isAdministrator: false, isInstalled: false).Result);
     }
 
+    [Fact]
+    public void DriverPackageIsFoundOnlyWhenBothMarkersMatch()
+    {
+        const string PAWN_IO = "[Version]\nProvider = \"namazso\"\n[SourceDisksFiles]\nPawnIO.sys = 1,,\n";
+        Assert.True(PawnIoSetup.IsPawnIoInf(PAWN_IO));
+        Assert.False(PawnIoSetup.IsPawnIoInf("Provider = \"namazso\""));
+        Assert.False(PawnIoSetup.IsPawnIoInf("PawnIO.sys, Provider = \"Other\""));
+
+        var folder = Path.Combine(AppContext.BaseDirectory, $"test-output-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(folder);
+        try
+        {
+            File.WriteAllText(Path.Combine(folder, "oem1.inf"), PAWN_IO, Encoding.Unicode);
+            File.WriteAllText(Path.Combine(folder, "oem2.inf"), "Provider = \"Intel\"");
+            File.WriteAllText(Path.Combine(folder, "pawnio.inf"), PAWN_IO);
+
+            Assert.Equal(["oem1.inf"], PawnIoSetup.FindDriverInfs(folder));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData(1u, "1.2")]
     [InlineData(2u, "2.0")]

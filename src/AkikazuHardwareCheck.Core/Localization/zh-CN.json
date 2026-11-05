@@ -238,6 +238,7 @@
   "ui.downloadPageUrl": "https://www.akikazu.co.jp/zh-CN/tools?tab=hardware",
   "ui.driverFailed": "传感器驱动安装失败（代码 {0}）。其他功能不受影响。",
   "ui.driverReboot": "传感器驱动已安装，重启电脑后可读取 CPU 温度。",
+  "ui.driverRemoveFailed": "传感器驱动未能完全移除。它不会自动运行，也不影响使用；可在设备管理器或重新运行本工具后再处理。",
   "ui.elevationFailed": "未能以管理员身份启动：{0}",
   "ui.gpuLimit": "GPU 温度保护（°C）",
   "ui.gpuLoad": "GPU 使用率",

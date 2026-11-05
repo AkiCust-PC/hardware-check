@@ -238,6 +238,7 @@
   "ui.downloadPageUrl": "https://www.akikazu.co.jp/en-US/tools?tab=hardware",
   "ui.driverFailed": "The sensor driver could not be installed (code {0}). Other features still work.",
   "ui.driverReboot": "The sensor driver is installed. Restart the PC to read CPU temperatures.",
+  "ui.driverRemoveFailed": "The sensor driver could not be fully removed. It does not start by itself and causes no harm. Remove it in Device Manager, or run this tool again.",
   "ui.elevationFailed": "Could not start as administrator: {0}",
   "ui.gpuLimit": "GPU temperature limit (°C)",
   "ui.gpuLoad": "GPU usage",

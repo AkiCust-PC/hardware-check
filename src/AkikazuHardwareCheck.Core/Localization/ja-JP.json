@@ -238,6 +238,7 @@
   "ui.downloadPageUrl": "https://www.akikazu.co.jp/tools?tab=hardware",
   "ui.driverFailed": "センサードライバーをインストールできませんでした（コード {0}）。他の機能は使用できます。",
   "ui.driverReboot": "センサードライバーをインストールしました。再起動後に CPU 温度を読み取れます。",
+  "ui.driverRemoveFailed": "センサードライバーを完全には削除できませんでした。自動では動作せず、使用にも影響しません。デバイス マネージャーで削除するか、本ツールを再実行してください。",
   "ui.elevationFailed": "管理者として起動できませんでした: {0}",
   "ui.gpuLimit": "GPU 温度保護（°C）",
   "ui.gpuLoad": "GPU 使用率",
