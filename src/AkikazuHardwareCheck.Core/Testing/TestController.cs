@@ -142,7 +142,7 @@ public sealed class TestController(
 
         var status = (isStopped, isBusy, hasTemperature) switch
         {
-            (true, _, _) => TestStatus.Incomplete,
+            (true, _, _) => TestStatus.Cancelled,
             (_, true, _) => TestStatus.Incomplete,
             (_, _, false) => TestStatus.InsufficientData,
             _ => TestStatus.Passed,
@@ -206,7 +206,7 @@ public sealed class TestController(
             var stress = running[index].Stress;
             RecordProtection(stress, protections[index]);
             RecordOutcome(stress.Phase, outcomes[index], cancellationToken);
-            _phases.Add(SummarizeStress(stress, plan, session, samplePhase, outcomes[index], protections[index], startedAt, duration, seconds));
+            _phases.Add(SummarizeStress(stress, plan, session, samplePhase, outcomes[index], protections[index], startedAt, duration, seconds, cancellationToken));
         }
     }
 
@@ -240,7 +240,7 @@ public sealed class TestController(
         return stresses;
     }
 
-    private PhaseResult SummarizeStress(StressContext stress, TestPlan plan, MonitoringSession session, TestPhase samplePhase, StressOutcome outcome, ProtectionWatch protection, DateTimeOffset startedAt, double duration, double seconds)
+    private PhaseResult SummarizeStress(StressContext stress, TestPlan plan, MonitoringSession session, TestPhase samplePhase, StressOutcome outcome, ProtectionWatch protection, DateTimeOffset startedAt, double duration, double seconds, CancellationToken cancellationToken)
     {
         var samples = PhaseSamples(session, samplePhase);
         var hasTemperature = HasSufficient(samples, plan, seconds, stress.IsTemperatureValid);
@@ -270,6 +270,14 @@ public sealed class TestController(
         }
 
         var status = TestResultEvaluator.EvaluateStress(outcome.End, hasTemperature, isLoadKnown, isLoadSufficient, protection.WasOverheated);
+
+        // The same StressEnd.Cancelled is used for a user stop and for a safety stop. A safety stop is an unfinished
+        // measurement rather than a user cancellation, so it keeps the older "incomplete" meaning.
+        if (outcome.End == StressEnd.Cancelled && !cancellationToken.IsCancellationRequested && !protection.WasOverheated)
+        {
+            status = TestStatus.Incomplete;
+        }
+
         var sensorName = samples.FirstOrDefault(stress.IsTemperatureValid)?.SensorName;
         return new PhaseResult(stress.Phase, status, true, startedAt, DateTimeOffset.Now, duration, seconds, stress.TargetDevice, loadAverage, sensorLoad.Maximum, loadSource, sensorName, outcome.WorkUnits, outcome.VerificationErrors);
     }
@@ -344,7 +352,7 @@ public sealed class TestController(
         _phases.Add(new PhaseResult(phase, status, isRequested, null, null, planned, 0, null, null, null, null, null, 0, 0));
 
     private void AddStopped(TestPhase phase, double planned) =>
-        AddSkipped(phase, TestStatus.NotRun, isRequested: true, planned);
+        AddSkipped(phase, TestStatus.Cancelled, isRequested: true, planned);
 
     private static async Task DelayUntilCancelled(TimeSpan duration, CancellationToken cancellationToken)
     {

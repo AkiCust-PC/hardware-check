@@ -18,10 +18,13 @@ public static class TestResultEvaluator
             : OverallResult.Incomplete;
     }
 
-    /// <summary>Failures outrank missing data, and missing temperatures or load data never count as a pass.</summary>
+    /// <summary>
+    /// A hardware finding outranks missing data. A failed test program is not a hardware finding, and an explicit
+    /// cancellation is not an incomplete measurement: both are kept separate so the report never calls either one a pass.
+    /// </summary>
     public static TestStatus EvaluateStress(StressEnd end, bool hasTemperature, bool isLoadKnown, bool isLoadSufficient, bool wasOverheated)
     {
-        if (end is StressEnd.VerificationFailed or StressEnd.DeviceLost or StressEnd.DriverReset or StressEnd.Failed || wasOverheated)
+        if (end is StressEnd.VerificationFailed or StressEnd.DeviceLost or StressEnd.DriverReset || wasOverheated)
         {
             return TestStatus.IssueFound;
         }
@@ -29,7 +32,8 @@ public static class TestResultEvaluator
         return end switch
         {
             StressEnd.Unsupported => TestStatus.Unsupported,
-            StressEnd.Cancelled => TestStatus.Incomplete,
+            StressEnd.Cancelled => TestStatus.Cancelled,
+            StressEnd.Failed => TestStatus.ExecutionFailed,
             _ when isLoadKnown && !isLoadSufficient => TestStatus.IssueFound,
             _ when !hasTemperature || !isLoadKnown => TestStatus.InsufficientData,
             _ => TestStatus.Passed,

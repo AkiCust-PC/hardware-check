@@ -4,6 +4,7 @@ using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
+using AkikazuHardwareCheck.Core.AdvancedInfo;
 using AkikazuHardwareCheck.Core.Configuration;
 using AkikazuHardwareCheck.Core.Hardware;
 using AkikazuHardwareCheck.Core.Localization;
@@ -87,6 +88,7 @@ internal sealed class MainForm : Form
     private readonly Button _cpuInfoButton = Ui.Button();
     private readonly Button _speakerTestButton = Ui.Button();
     private readonly Button _micTestButton = Ui.Button();
+    private readonly Button _advancedButton = Ui.Button();
 
     private readonly Label _overallLabel = Ui.Label(isBold: true);
     private readonly InfoView _resultList = new();
@@ -120,6 +122,7 @@ internal sealed class MainForm : Form
     private SensorSampler? _liveSampler;
     private ActivityMonitor? _activityMonitor;
     private CancellationTokenSource? _testStop;
+    private AdvancedInfoForm? _advancedForm;
     private TestRunResult? _lastRun;
     private MemoryTestResult? _memoryResult;
     private DiskTestResult? _diskResult;
@@ -262,16 +265,28 @@ internal sealed class MainForm : Form
 
     private TableLayoutPanel BuildRootPanel()
     {
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(Ui.SPACING * 2) };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Padding = new Padding(Ui.SPACING * 2) };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.Controls.Add(BuildNotice(), 0, 0);
-        root.Controls.Add(BuildBody(), 0, 1);
-        root.Controls.Add(BuildFooter(), 0, 2);
+        root.Controls.Add(BuildToolbar(), 0, 0);
+        root.Controls.Add(BuildNotice(), 0, 1);
+        root.Controls.Add(BuildBody(), 0, 2);
+        root.Controls.Add(BuildFooter(), 0, 3);
         _rootPanel = root;
         return root;
+    }
+
+    private FlowLayoutPanel BuildToolbar()
+    {
+        var bar = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Dock = DockStyle.Fill, WrapContents = false, Margin = new Padding(0, 0, 0, Ui.SPACING) };
+        _advancedButton.Text = _t["ui.advancedInfo"];
+        _advancedButton.MinimumSize = new Size(0, Ui.BUTTON_MIN_HEIGHT);
+        _advancedButton.Click += (_, _) => ShowAdvancedInfo();
+        bar.Controls.Add(_advancedButton);
+        return bar;
     }
 
     private TableLayoutPanel BuildFooter()
@@ -808,6 +823,11 @@ internal sealed class MainForm : Form
 
     private void ApplyLanguage()
     {
+        // The advanced window holds a snapshot with labels in the old language. Reopening it is cheaper and safer
+        // than trying to relabel a tree that may already be filtered.
+        _advancedForm?.Close();
+        _advancedForm = null;
+
         Font = Ui.FontFor(_t.Language);
         BuildMenu();
         ApplyEmphasis();
@@ -850,6 +870,7 @@ internal sealed class MainForm : Form
         _diskTestButton.Text = _t["ui.diskTest"];
         _speakerTestButton.Text = _t["ui.speakerTest"];
         _micTestButton.Text = _t["ui.micTest"];
+        _advancedButton.Text = _t["ui.advancedInfo"];
         StyleViewSwitch();
 
         if (!IsTestRunning)
@@ -956,6 +977,34 @@ internal sealed class MainForm : Form
             form.ShowDialog(this);
         }
     }
+
+    /// <summary>
+    /// The window is modeless so monitoring stays visible. It is also allowed while a test runs: the snapshot then
+    /// contains the last live sensor sample, and Refresh only rebuilds from that same snapshot source.
+    /// </summary>
+    private void ShowAdvancedInfo()
+    {
+        if (_hardware is null)
+        {
+            return;
+        }
+
+        if (_advancedForm is { IsDisposed: false })
+        {
+            _advancedForm.Activate();
+            return;
+        }
+
+        var form = new AdvancedInfoForm(_t, BuildAdvancedSnapshot(), BuildAdvancedSnapshot, Font);
+        form.FormClosed += (_, _) => _advancedForm = null;
+        _advancedForm = form;
+        form.Show(this);
+    }
+
+    private AdvancedSnapshot BuildAdvancedSnapshot() =>
+        _hardware is { } hardware
+            ? AdvancedInfoBuilder.Build(_t, hardware, _sensors, DateTimeOffset.Now)
+            : new AdvancedSnapshot(DateTimeOffset.Now, CheckReport.CurrentToolVersion, []);
 
     private void FillTargetBox()
     {
@@ -1396,6 +1445,7 @@ internal sealed class MainForm : Form
         _diskTestButton.Enabled = isReady && !isRunning;
         _speakerTestButton.Enabled = isReady && !isRunning;
         _micTestButton.Enabled = isReady && !isRunning;
+        _advancedButton.Enabled = isReady;
         _elevateButton.Enabled = !isRunning;
         if (_menu is { } menu)
         {

@@ -8,6 +8,8 @@ public enum TestStatus
     Unsupported,
     NotRun,
     InsufficientData,
+    Cancelled,
+    ExecutionFailed,
 }
 
 public enum OverallResult

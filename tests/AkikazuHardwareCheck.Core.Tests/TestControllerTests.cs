@@ -161,21 +161,21 @@ public class TestControllerTests
     }
 
     [Theory]
-    [InlineData(StressEnd.DeviceLost, AnomalyCode.GpuDeviceLost)]
-    [InlineData(StressEnd.DriverReset, AnomalyCode.GpuDriverReset)]
-    [InlineData(StressEnd.VerificationFailed, AnomalyCode.GpuVerificationError)]
-    [InlineData(StressEnd.Failed, AnomalyCode.StressAbnormalExit)]
-    public async Task GpuFailureIsRecordedAndCpuLoadStillFinishes(StressEnd end, AnomalyCode expected)
+    [InlineData(StressEnd.DeviceLost, AnomalyCode.GpuDeviceLost, TestStatus.IssueFound, OverallResult.NeedsReview)]
+    [InlineData(StressEnd.DriverReset, AnomalyCode.GpuDriverReset, TestStatus.IssueFound, OverallResult.NeedsReview)]
+    [InlineData(StressEnd.VerificationFailed, AnomalyCode.GpuVerificationError, TestStatus.IssueFound, OverallResult.NeedsReview)]
+    [InlineData(StressEnd.Failed, AnomalyCode.StressAbnormalExit, TestStatus.ExecutionFailed, OverallResult.Incomplete)]
+    public async Task GpuFailureIsRecordedAndCpuLoadStillFinishes(StressEnd end, AnomalyCode expected, TestStatus phaseStatus, OverallResult overall)
     {
         var cpu = new FakeLoad(Completed());
 
         var result = await Run(new FakeSensors(), new FakeLoad(new StressOutcome(end, 1, 0, null, "detail")), cpu);
 
         Assert.Contains(result.Anomalies, anomaly => anomaly.Code == expected);
-        Assert.Equal(TestStatus.IssueFound, Phase(result, TestPhase.GpuStress).Status);
+        Assert.Equal(phaseStatus, Phase(result, TestPhase.GpuStress).Status);
         Assert.True(cpu.WasRun);
         Assert.Equal(TestStatus.Passed, Phase(result, TestPhase.CpuStress).Status);
-        Assert.Equal(OverallResult.NeedsReview, result.Overall);
+        Assert.Equal(overall, result.Overall);
     }
 
     [Fact]
@@ -228,8 +228,8 @@ public class TestControllerTests
 
         var result = await Run(new FakeSensors(), gpu, cpu, token: stop.Token);
 
-        Assert.Equal(TestStatus.Incomplete, Phase(result, TestPhase.GpuStress).Status);
-        Assert.Equal(TestStatus.Incomplete, Phase(result, TestPhase.CpuStress).Status);
+        Assert.Equal(TestStatus.Cancelled, Phase(result, TestPhase.GpuStress).Status);
+        Assert.Equal(TestStatus.Cancelled, Phase(result, TestPhase.CpuStress).Status);
         Assert.Contains(result.Anomalies, anomaly => anomaly.Code == AnomalyCode.UserStopped);
         Assert.Equal(OverallResult.Incomplete, result.Overall);
     }
@@ -271,8 +271,8 @@ public class TestControllerTests
         var result = await Run(new FakeSensors(), new HungLoad(), new FakeLoad(Completed()));
 
         Assert.Contains(result.Anomalies, anomaly => anomaly is { Code: AnomalyCode.StressTimedOut, Phase: TestPhase.GpuStress });
-        Assert.Equal(TestStatus.IssueFound, Phase(result, TestPhase.GpuStress).Status);
-        Assert.Equal(OverallResult.NeedsReview, result.Overall);
+        Assert.Equal(TestStatus.ExecutionFailed, Phase(result, TestPhase.GpuStress).Status);
+        Assert.Equal(OverallResult.Incomplete, result.Overall);
     }
 
     [Fact]
@@ -299,7 +299,8 @@ public class TestControllerTests
     [InlineData(StressEnd.Completed, true, false, false, false, TestStatus.InsufficientData)]
     [InlineData(StressEnd.Completed, true, true, false, false, TestStatus.IssueFound)]
     [InlineData(StressEnd.Completed, true, true, true, true, TestStatus.IssueFound)]
-    [InlineData(StressEnd.Cancelled, true, true, true, false, TestStatus.Incomplete)]
+    [InlineData(StressEnd.Cancelled, true, true, true, false, TestStatus.Cancelled)]
+    [InlineData(StressEnd.Failed, true, true, true, false, TestStatus.ExecutionFailed)]
     [InlineData(StressEnd.Unsupported, false, false, false, false, TestStatus.Unsupported)]
     [InlineData(StressEnd.DeviceLost, false, false, false, false, TestStatus.IssueFound)]
     public void StressStatusRules(StressEnd end, bool hasTemperature, bool isLoadKnown, bool isLoadSufficient, bool wasOverheated, TestStatus expected)

@@ -47,7 +47,9 @@ public static class TemperatureSummary
     private static TemperatureRow ToRow(TestRunResult run, TestPhase phase, bool isCpu, SensorStatistics? statistics)
     {
         var result = run.Phases.FirstOrDefault(item => item.Phase == phase);
-        if (result is null || result.Status == TestStatus.NotRun || (result.Status is TestStatus.Unsupported && result.ActualSeconds == 0))
+        if (result is null
+            || result.Status == TestStatus.NotRun
+            || ((result.Status is TestStatus.Unsupported or TestStatus.Cancelled or TestStatus.ExecutionFailed) && result.ActualSeconds == 0))
         {
             return new TemperatureRow(isCpu, phase, null, null, null, null, 0, TemperatureRowState.NotRun);
         }

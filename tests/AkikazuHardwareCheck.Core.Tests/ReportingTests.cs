@@ -87,6 +87,11 @@ public class ReportingTests
         {
             Assert.NotEmpty(t[EnumText.Key("gpu.kind", value)]);
         }
+
+        foreach (var value in Enum.GetValues<TestStatus>())
+        {
+            Assert.NotEmpty(t[EnumText.Key("status", value)]);
+        }
     }
 
     [Fact]

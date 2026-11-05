@@ -15,7 +15,7 @@ public sealed record CheckReport(
     IReadOnlyList<TemperatureRow>? Temperatures = null,
     IReadOnlyList<LoadMetricRow>? LoadMetrics = null)
 {
-    public const int CURRENT_SCHEMA_VERSION = 7;
+    public const int CURRENT_SCHEMA_VERSION = 8;
 
     public static string CurrentToolVersion { get; } = typeof(CheckReport).Assembly.GetName().Version?.ToString(3) ?? "unknown";
 }

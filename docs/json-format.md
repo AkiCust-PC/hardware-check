@@ -1,6 +1,6 @@
 # JSON 技术记录格式
 
-当前 `SchemaVersion` 为 `7`。枚举值使用英文代码，不随界面语言变化。无法取得的值为 `null`。硬件名称（如 Windows 名称）保持系统返回的原文。
+当前 `SchemaVersion` 为 `8`。枚举值使用英文代码，不随界面语言变化。无法取得的值为 `null`。硬件名称（如 Windows 名称）保持系统返回的原文。
 
 ## 顶层
 
@@ -68,13 +68,15 @@
 | 字段 | 说明 |
 | --- | --- |
 | `Phase` | `Idle`、`GpuStress`、`CpuStress` |
-| `Status` | `Passed`、`IssueFound`、`Incomplete`、`Unsupported`、`NotRun`、`InsufficientData` |
+| `Status` | `Passed`、`IssueFound`、`Incomplete`、`Unsupported`、`NotRun`、`InsufficientData`、`Cancelled`、`ExecutionFailed` |
 | `IsRequested` | 本次是否要求运行。未要求的项目不影响整体结果 |
 | `PlannedSeconds`、`ActualSeconds` | 计划和实际时长 |
 | `TargetDevice` | 目标 GPU |
 | `AverageLoadPercent`、`MaximumLoadPercent`、`LoadSource` | 负载和来源：`Sensor` 或 `ProcessTime` |
 | `TemperatureSensor` | 用于判定的温度传感器 |
 | `WorkUnits`、`VerificationErrors` | 完成的工作单元和校验错误数 |
+
+`Cancelled` 表示用户主动停止；`ExecutionFailed` 表示测试程序异常或看门狗超时，不等同于硬件测试不通过。
 
 ### `Statistics[]`
 
