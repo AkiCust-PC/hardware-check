@@ -59,7 +59,26 @@ internal sealed class DisplayTestForm : Form
     {
         _index = index;
         var old = _picture.Image;
-        _picture.Image = CreatePattern(index, ClientSize);
+        if (index <= 5)
+        {
+            // Solid patterns need no bitmap at all: the native PictureBox paints its BackColor.
+            _picture.Image = null;
+            _picture.BackColor = index switch
+            {
+                0 => Color.White,
+                1 => Color.Black,
+                2 => Color.Red,
+                3 => Color.Lime,
+                4 => Color.Blue,
+                _ => Color.Gray,
+            };
+        }
+        else
+        {
+            _picture.BackColor = Color.Black;
+            _picture.Image = CreatePattern(index, ClientSize);
+        }
+
         old?.Dispose();
         _hint.Text = $"{_t["peripheralTest.displayHint"]}  {index + 1}/{PATTERN_COUNT}";
     }
@@ -70,38 +89,14 @@ internal sealed class DisplayTestForm : Form
         var height = Math.Max(1, size.Height);
         var bitmap = new Bitmap(width, height);
         using var graphics = Graphics.FromImage(bitmap);
-        switch (index)
+        if (index == 6)
         {
-            case 0:
-                graphics.Clear(Color.White);
-                break;
-            case 1:
-                graphics.Clear(Color.Black);
-                break;
-            case 2:
-                graphics.Clear(Color.Red);
-                break;
-            case 3:
-                graphics.Clear(Color.Lime);
-                break;
-            case 4:
-                graphics.Clear(Color.Blue);
-                break;
-            case 5:
-                graphics.Clear(Color.Gray);
-                break;
-            case 6:
-                using (var brush = new LinearGradientBrush(new Rectangle(0, 0, width, height), Color.Black, Color.White, LinearGradientMode.Horizontal))
-                {
-                    graphics.FillRectangle(brush, 0, 0, width, height);
-                }
-
-                break;
-            default:
-                DrawChecker(graphics, width, height);
-                break;
+            using var brush = new LinearGradientBrush(new Rectangle(0, 0, width, height), Color.Black, Color.White, LinearGradientMode.Horizontal);
+            graphics.FillRectangle(brush, 0, 0, width, height);
+            return bitmap;
         }
 
+        DrawChecker(graphics, width, height);
         return bitmap;
     }
 
