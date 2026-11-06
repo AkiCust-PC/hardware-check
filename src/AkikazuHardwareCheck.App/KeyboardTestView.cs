@@ -3,122 +3,95 @@ using AkikazuHardwareCheck.Core.Localization;
 namespace AkikazuHardwareCheck.App;
 
 /// <summary>
-/// A visual keyboard laid out like the one on the hardware test page: ANSI and JIS rows, with pressed keys lit while
-/// held and tested keys marked afterwards. Native labels are used instead of drawing so the window keeps the system look.
+/// A full Japanese 106-key keyboard check: every key is drawn as a native key cap, pressed keys light up, tested keys
+/// stay marked, and the maximum number of simultaneous keys is reported. No layout switch is needed for this test.
 /// </summary>
 internal sealed class KeyboardTestView : UserControl
 {
-    private enum KeyboardLayoutKind
-    {
-        Ansi,
-        Jis,
-    }
-
     private sealed record KeyDefinition(Keys Key, string Label, float Width);
 
-    private static readonly (Keys Key, string Label)[] JisOnly =
-    [
-        ((Keys)0xDC, "¥"),
-        ((Keys)0xE2, "ろ"),
-        ((Keys)0x1D, "無変換"),
-        ((Keys)0x1C, "変換"),
-        ((Keys)0x15, "かな"),
-        ((Keys)0x19, "英数"),
-    ];
-
-    // 0xDC is also the ANSI backslash key, so it cannot be used as proof of a JIS keyboard.
-    private static readonly HashSet<Keys> JisDetectionKeys = [.. JisOnly.Select(item => item.Key).Where(key => (int)key != 0xDC)];
+    private sealed record GridKey(Keys Key, string Label, int Column, int Row, int ColumnSpan = 1, int RowSpan = 1);
 
     private readonly Translator _t;
-    private readonly ComboBox _layout = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 180 };
+    private readonly Panel _scroll = new() { Dock = DockStyle.Fill, AutoScroll = true };
+    private readonly TableLayoutPanel _main = new() { AutoSize = true, Dock = DockStyle.Top, ColumnCount = 1, Margin = new Padding(0) };
     private readonly Label _progress = Ui.Label();
     private readonly Label _pressedLabel = Ui.Label();
-    private readonly Panel _scroll = new() { Dock = DockStyle.Fill, AutoScroll = true };
-    private readonly TableLayoutPanel _board = new() { AutoSize = true, Dock = DockStyle.Top, ColumnCount = 1, Margin = new Padding(0) };
-    private readonly Dictionary<Keys, Label> _keyLabels = [];
+    private readonly Label _rollover = Ui.Label();
+    private readonly Font _keyFont;
+    private readonly List<(Keys Key, Label Label)> _keyLabels = [];
     private readonly HashSet<Keys> _tested = [];
     private readonly HashSet<Keys> _pressed = [];
-    private KeyboardLayoutKind _currentLayout = KeyboardLayoutKind.Jis;
-    private bool _isManualLayout;
+    private int _maxPressed;
 
     public KeyboardTestView(Translator t, Font font)
     {
         _t = t;
         Font = font;
+        _keyFont = new Font(font.FontFamily, 7f);
         Dock = DockStyle.Fill;
         Padding = new Padding(Ui.SPACING);
 
         var reset = Ui.Button();
         reset.Text = t["peripheralTest.clear"];
         reset.Click += (_, _) => Reset();
-        _layout.Items.AddRange([t["keyboardTest.ansi"], t["keyboardTest.jis"]]);
-        _layout.SelectedIndex = 1;
-        _layout.SelectedIndexChanged += (_, _) =>
-        {
-            if (_layout.SelectedIndex < 0)
-            {
-                return;
-            }
 
-            _currentLayout = _layout.SelectedIndex == 0 ? KeyboardLayoutKind.Ansi : KeyboardLayoutKind.Jis;
-            _isManualLayout = true;
-            Reset();
-            BuildRows();
+        var hint = new Label
+        {
+            Text = t["keyboardTest.hint"],
+            AutoSize = true,
+            MaximumSize = new Size(LogicalToDeviceUnits(900), 0),
+            ForeColor = SystemColors.GrayText,
+            Margin = new Padding(0, 0, 0, Ui.SPACING),
         };
 
-        var layoutRow = Ui.Flow();
-        layoutRow.WrapContents = false;
-        layoutRow.Controls.Add(new Label { Text = t["keyboardTest.layout"], AutoSize = true, Margin = new Padding(0, 6, Ui.SPACING, 0) });
-        layoutRow.Controls.Add(_layout);
-        layoutRow.Controls.Add(reset);
+        var blocks = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Dock = DockStyle.Top,
+            WrapContents = false,
+            Margin = new Padding(0),
+        };
+        BuildMain();
+        blocks.Controls.Add(_main);
+        blocks.Controls.Add(BuildNavigation());
+        blocks.Controls.Add(BuildNumpad());
+        _scroll.Controls.Add(blocks);
 
-        _board.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        _scroll.Controls.Add(_board);
+        var top = Ui.Flow();
+        top.WrapContents = false;
+        top.Controls.Add(reset);
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Margin = new Padding(0) };
+        var status = Ui.Flow();
+        status.WrapContents = false;
+        status.Controls.AddRange([_progress, _pressedLabel, _rollover]);
+
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Margin = new Padding(0) };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        var hint = new Label
-        {
-            Text = t["keyboardTest.hint"],
-            AutoSize = true,
-            MaximumSize = new Size(LogicalToDeviceUnits(760), 0),
-            ForeColor = SystemColors.GrayText,
-            Margin = new Padding(0, 0, 0, Ui.SPACING),
-        };
         root.Controls.Add(hint, 0, 0);
-        root.Controls.Add(layoutRow, 0, 1);
+        root.Controls.Add(top, 0, 1);
         root.Controls.Add(_scroll, 0, 2);
-        root.Controls.Add(_progress, 0, 3);
-        var bottom = Ui.Flow();
-        bottom.Controls.Add(_pressedLabel);
-        root.Controls.Add(bottom, 0, 4);
+        root.Controls.Add(status, 0, 3);
         Controls.Add(root);
-
-        BuildRows();
         UpdateStatus();
     }
 
     public void MarkKeyDown(Keys key)
     {
-        if (!_isManualLayout && JisDetectionKeys.Contains(key))
-        {
-            _currentLayout = KeyboardLayoutKind.Jis;
-            _layout.SelectedIndex = 1;
-            BuildRows();
-        }
-
-        if (!_keyLabels.ContainsKey(key))
+        var labels = _keyLabels.Where(item => item.Key == key).Select(item => item.Label).ToList();
+        if (labels.Count == 0)
         {
             return;
         }
 
         _tested.Add(key);
         _pressed.Add(key);
+        _maxPressed = Math.Max(_maxPressed, _pressed.Count);
         PaintKeys();
         UpdateStatus();
     }
@@ -136,141 +109,217 @@ internal sealed class KeyboardTestView : UserControl
     {
         _tested.Clear();
         _pressed.Clear();
+        _maxPressed = 0;
         PaintKeys();
         UpdateStatus();
     }
 
-    private void BuildRows()
+    private void BuildMain()
     {
-        _board.SuspendLayout();
-        _board.Controls.Clear();
-        _board.RowStyles.Clear();
-        _board.RowCount = 0;
-        _keyLabels.Clear();
-
-        foreach (var row in Rows())
+        _main.Controls.Clear();
+        _main.RowStyles.Clear();
+        _main.RowCount = 0;
+        foreach (var row in MainRows())
         {
             var line = BuildRow(row);
-            _board.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            _board.Controls.Add(line, 0, _board.RowCount++);
+            _main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            _main.Controls.Add(line, 0, _main.RowCount++);
         }
-
-        if (_currentLayout == KeyboardLayoutKind.Jis)
-        {
-            var jis = JisOnly.Select(item => new KeyDefinition(item.Key, item.Label, 1.7f)).ToArray();
-            var line = BuildRow(jis);
-            _board.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            _board.Controls.Add(line, 0, _board.RowCount++);
-        }
-
-        _board.ResumeLayout();
-        PaintKeys();
-        UpdateStatus();
     }
 
     private TableLayoutPanel BuildRow(IReadOnlyList<KeyDefinition> row)
     {
-        var unit = LogicalToDeviceUnits(44);
+        var unit = LogicalToDeviceUnits(34);
         var width = (int)Math.Round(row.Sum(key => key.Width) * unit);
         var line = new TableLayoutPanel
         {
             AutoSize = false,
             Width = width,
-            Height = LogicalToDeviceUnits(40),
+            Height = LogicalToDeviceUnits(34),
             Dock = DockStyle.None,
             Anchor = AnchorStyles.Top | AnchorStyles.Left,
-            Margin = new Padding(0),
+            Margin = new Padding(0, 1, 0, 1),
             RowCount = 1,
             ColumnCount = row.Count,
         };
-        line.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(40)));
+        line.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(34)));
         for (var index = 0; index < row.Count; index++)
         {
             var key = row[index];
             line.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, (float)Math.Round(unit * key.Width)));
-            var label = new Label
-            {
-                Text = key.Label,
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleCenter,
-                BorderStyle = BorderStyle.FixedSingle,
-                Margin = new Padding(1),
-                AutoSize = false,
-                BackColor = SystemColors.Control,
-                ForeColor = SystemColors.ControlText,
-                UseMnemonic = false,
-            };
-            _keyLabels[key.Key] = label;
-            line.Controls.Add(label, index, 0);
+            line.Controls.Add(MakeKey(key.Key, key.Label), index, 0);
         }
 
         return line;
     }
 
-    private IEnumerable<KeyDefinition[]> Rows()
+    private TableLayoutPanel BuildNavigation()
     {
-        yield return FunctionKeys();
-        yield return NumberRow();
-        yield return TopLetterRow();
-        yield return HomeLetterRow();
-        yield return BottomLetterRow();
-        yield return ModifierRow();
+        var block = Grid(3, 5);
+        AddGrid(block, new GridKey(Keys.Insert, "Ins", 0, 0));
+        AddGrid(block, new GridKey(Keys.Home, "Hom", 1, 0));
+        AddGrid(block, new GridKey(Keys.PageUp, "PgU", 2, 0));
+        AddGrid(block, new GridKey(Keys.Delete, "Del", 0, 1));
+        AddGrid(block, new GridKey(Keys.End, "End", 1, 1));
+        AddGrid(block, new GridKey(Keys.PageDown, "PgD", 2, 1));
+        AddGrid(block, new GridKey(Keys.Up, "↑", 1, 2));
+        AddGrid(block, new GridKey(Keys.Left, "←", 0, 3));
+        AddGrid(block, new GridKey(Keys.Down, "↓", 1, 3));
+        AddGrid(block, new GridKey(Keys.Right, "→", 2, 3));
+        return block;
     }
 
-    private static KeyDefinition[] FunctionKeys() =>
-    [
-        new(Keys.Escape, "Esc", 1),
-        .. Enumerable.Range(1, 12).Select(index => new KeyDefinition((Keys)((int)Keys.F1 + index - 1), $"F{index}", 1)),
-    ];
+    private TableLayoutPanel BuildNumpad()
+    {
+        var block = Grid(4, 5);
+        AddGrid(block, new GridKey(Keys.NumLock, "Num", 0, 0));
+        AddGrid(block, new GridKey(Keys.Divide, "/", 1, 0));
+        AddGrid(block, new GridKey(Keys.Multiply, "*", 2, 0));
+        AddGrid(block, new GridKey(Keys.Subtract, "-", 3, 0));
+        AddGrid(block, new GridKey(Keys.NumPad7, "7", 0, 1));
+        AddGrid(block, new GridKey(Keys.NumPad8, "8", 1, 1));
+        AddGrid(block, new GridKey(Keys.NumPad9, "9", 2, 1));
+        AddGrid(block, new GridKey(Keys.Add, "+", 3, 1, RowSpan: 2));
+        AddGrid(block, new GridKey(Keys.NumPad4, "4", 0, 2));
+        AddGrid(block, new GridKey(Keys.NumPad5, "5", 1, 2));
+        AddGrid(block, new GridKey(Keys.NumPad6, "6", 2, 2));
+        AddGrid(block, new GridKey(Keys.NumPad1, "1", 0, 3));
+        AddGrid(block, new GridKey(Keys.NumPad2, "2", 1, 3));
+        AddGrid(block, new GridKey(Keys.NumPad3, "3", 2, 3));
+        AddGrid(block, new GridKey(Keys.Enter, "Ent", 3, 3, RowSpan: 2));
+        AddGrid(block, new GridKey(Keys.NumPad0, "0", 0, 4, ColumnSpan: 2));
+        AddGrid(block, new GridKey(Keys.Decimal, ".", 2, 4));
+        return block;
+    }
 
-    private static KeyDefinition[] NumberRow() =>
-    [
-        new(Keys.Oemtilde, "`", 1),
-        .. Enumerable.Range(0, 10).Select(index => new KeyDefinition((Keys)((int)Keys.D0 + index), index.ToString(), 1)),
-        new(Keys.OemMinus, "-", 1),
-        new(Keys.Oemplus, "=", 1),
-        new(Keys.Back, "Backspace", 2),
-    ];
+    private TableLayoutPanel Grid(int columns, int rows)
+    {
+        var unit = LogicalToDeviceUnits(34);
+        var grid = new TableLayoutPanel
+        {
+            AutoSize = false,
+            Width = columns * unit,
+            Height = rows * LogicalToDeviceUnits(34),
+            Dock = DockStyle.None,
+            Anchor = AnchorStyles.Top | AnchorStyles.Left,
+            Margin = new Padding(Ui.SPACING, 1, 0, 1),
+            ColumnCount = columns,
+            RowCount = rows,
+        };
+        for (var column = 0; column < columns; column++)
+        {
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, unit));
+        }
 
-    private static KeyDefinition[] TopLetterRow() =>
-    [
-        new(Keys.Tab, "Tab", 1.5f),
-        .. "QWERTYUIOP".Select(letter => new KeyDefinition((Keys)Enum.Parse(typeof(Keys), letter.ToString()), letter.ToString(), 1)),
-        new(Keys.OemOpenBrackets, "[", 1),
-        new(Keys.OemCloseBrackets, "]", 1),
-        new(Keys.OemPipe, "\\", 1.5f),
-    ];
+        for (var row = 0; row < rows; row++)
+        {
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(34)));
+        }
 
-    private static KeyDefinition[] HomeLetterRow() =>
-    [
-        new(Keys.CapsLock, "Caps", 1.8f),
-        .. "ASDFGHJKL".Select(letter => new KeyDefinition((Keys)Enum.Parse(typeof(Keys), letter.ToString()), letter.ToString(), 1)),
-        new(Keys.OemSemicolon, ";", 1),
-        new(Keys.OemQuotes, "'", 1),
-        new(Keys.Enter, "Enter", 2.2f),
-    ];
+        return grid;
+    }
 
-    private static KeyDefinition[] BottomLetterRow() =>
-    [
-        new(Keys.LShiftKey, "Shift", 2.3f),
-        .. "ZXCVBNM".Select(letter => new KeyDefinition((Keys)Enum.Parse(typeof(Keys), letter.ToString()), letter.ToString(), 1)),
-        new(Keys.Oemcomma, ",", 1),
-        new(Keys.OemPeriod, ".", 1),
-        new(Keys.OemQuestion, "/", 1),
-        new(Keys.RShiftKey, "Shift", 2.3f),
-    ];
+    private void AddGrid(TableLayoutPanel grid, GridKey key)
+    {
+        var label = MakeKey(key.Key, key.Label);
+        grid.Controls.Add(label, key.Column, key.Row);
+        if (key.ColumnSpan > 1)
+        {
+            grid.SetColumnSpan(label, key.ColumnSpan);
+        }
 
-    private static KeyDefinition[] ModifierRow() =>
-    [
-        new(Keys.LControlKey, "Ctrl", 1.5f),
-        new(Keys.LWin, "Win", 1.5f),
-        new(Keys.LMenu, "Alt", 1.5f),
-        new(Keys.Space, "Space", 6),
-        new(Keys.RMenu, "Alt", 1.5f),
-        new(Keys.RWin, "Win", 1.5f),
-        new(Keys.Apps, "Menu", 1.5f),
-        new(Keys.RControlKey, "Ctrl", 1.5f),
-    ];
+        if (key.RowSpan > 1)
+        {
+            grid.SetRowSpan(label, key.RowSpan);
+        }
+    }
+
+    private Label MakeKey(Keys key, string label)
+    {
+        var control = new Label
+        {
+            Text = label,
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleCenter,
+            BorderStyle = BorderStyle.FixedSingle,
+            Margin = new Padding(1),
+            Padding = new Padding(0),
+            AutoSize = false,
+            Font = _keyFont,
+            BackColor = SystemColors.Control,
+            ForeColor = SystemColors.ControlText,
+            UseMnemonic = false,
+        };
+        _keyLabels.Add((key, control));
+        return control;
+    }
+
+    private static IEnumerable<KeyDefinition[]> MainRows()
+    {
+        yield return
+        [
+            new(Keys.Escape, "Esc", 1),
+            .. Enumerable.Range(1, 12).Select(index => new KeyDefinition((Keys)((int)Keys.F1 + index - 1), $"F{index}", 1)),
+            new(Keys.PrintScreen, "Prt", 1),
+            new(Keys.Scroll, "Scr", 1),
+            new(Keys.Pause, "Pau", 1),
+        ];
+
+        yield return
+        [
+            new((Keys)0xDF, "半角/全角", 1.4f),
+            .. Enumerable.Range(0, 10).Select(index => new KeyDefinition((Keys)((int)Keys.D0 + ((index + 1) % 10)), ((index + 1) % 10).ToString(), 1)),
+            new(Keys.OemMinus, "-", 1),
+            new(Keys.Oemplus, "^", 1),
+            new(Keys.OemPipe, "¥", 1),
+            new(Keys.Back, "Bksp", 2),
+        ];
+
+        yield return
+        [
+            new(Keys.Tab, "Tab", 1.5f),
+            .. "QWERTYUIOP".Select(letter => new KeyDefinition((Keys)Enum.Parse(typeof(Keys), letter.ToString()), letter.ToString(), 1)),
+            new(Keys.OemOpenBrackets, "@", 1),
+            new(Keys.OemCloseBrackets, "[", 1),
+            new(Keys.Enter, "Ent", 2.5f),
+        ];
+
+        yield return
+        [
+            new(Keys.CapsLock, "Caps", 1.8f),
+            .. "ASDFGHJKL".Select(letter => new KeyDefinition((Keys)Enum.Parse(typeof(Keys), letter.ToString()), letter.ToString(), 1)),
+            new(Keys.OemSemicolon, ";", 1),
+            new(Keys.OemQuotes, ":", 1),
+            new(Keys.OemBackslash, "]", 1),
+        ];
+
+        yield return
+        [
+            new(Keys.LShiftKey, "Shift", 2.3f),
+            .. "ZXCVBNM".Select(letter => new KeyDefinition((Keys)Enum.Parse(typeof(Keys), letter.ToString()), letter.ToString(), 1)),
+            new(Keys.Oemcomma, ",", 1),
+            new(Keys.OemPeriod, ".", 1),
+            new(Keys.OemQuestion, "/", 1),
+            new(Keys.Oem102, "\\", 1),
+            new(Keys.RShiftKey, "Shift", 2.3f),
+        ];
+
+        yield return
+        [
+            new(Keys.LControlKey, "Ctrl", 1.2f),
+            new(Keys.LWin, "Win", 1),
+            new(Keys.LMenu, "Alt", 1.2f),
+            new((Keys)0x1D, "無変換", 1.3f),
+            new(Keys.Space, "Space", 3.2f),
+            new((Keys)0x1C, "変換", 1.3f),
+            new((Keys)0x15, "かな", 1.2f),
+            new((Keys)0x19, "英数", 1.2f),
+            new(Keys.RMenu, "Alt", 1.2f),
+            new(Keys.RWin, "Win", 1),
+            new(Keys.Apps, "Men", 1.2f),
+            new(Keys.RControlKey, "Ctrl", 1.2f),
+        ];
+    }
 
     private void PaintKeys()
     {
@@ -294,9 +343,20 @@ internal sealed class KeyboardTestView : UserControl
         }
     }
 
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (disposing)
+        {
+            _keyFont.Dispose();
+        }
+    }
+
     private void UpdateStatus()
     {
-        _progress.Text = _t["keyboardTest.progress", _tested.Count, _keyLabels.Count];
-        _pressedLabel.Text = _t["keyboardTest.pressed", _pressed.Count == 0 ? "—" : string.Join(" + ", _pressed.Select(key => _keyLabels[key].Text))];
+        _progress.Text = _t["keyboardTest.progress", _tested.Count, _keyLabels.Select(item => item.Key).Distinct().Count()];
+        var pressed = _pressed.SelectMany(key => _keyLabels.Where(item => item.Key == key).Select(item => item.Label.Text).Take(1)).Order(StringComparer.Ordinal).ToList();
+        _pressedLabel.Text = _t["keyboardTest.pressed", pressed.Count == 0 ? "—" : string.Join(" + ", pressed)];
+        _rollover.Text = _t["keyboardTest.rollover", _pressed.Count, _maxPressed];
     }
 }

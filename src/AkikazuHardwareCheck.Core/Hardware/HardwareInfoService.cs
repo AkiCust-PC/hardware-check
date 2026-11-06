@@ -6,13 +6,14 @@ namespace AkikazuHardwareCheck.Core.Hardware;
 
 /// <summary>
 /// Reads every hardware source once. Independent sources run together so a slow WMI query does not hold up the rest;
-/// one unreadable source is reported as a gap and never stops the others.
+/// one unreadable source is reported as a gap and never stops the others. A caller can receive the core inventory
+/// first and the slower diagnostic groups afterwards.
 /// </summary>
 public static class HardwareInfoService
 {
     private const string PAWN_IO_UNINSTALL_KEY = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\PawnIO";
 
-    public static HardwareInventory Read()
+    public static HardwareInventory Read(Action<HardwareInventory>? onCoreReady = null)
     {
         var diagnostics = new ConcurrentBag<DiagnosticEntry>();
 
@@ -50,37 +51,42 @@ public static class HardwareInfoService
         var localeTask = Task.Run(() => Collect<LocaleInfo?>("Locale", null, LocaleCollector.Read));
         var reliabilityTask = Task.Run(() => Collect<ReliabilityInfo?>("Reliability", null, ReliabilityCollector.Read));
 
-        // These two depend on a previous result, so they start after it but still overlap each other.
+        // These depend on a previous result, so they start after it but still overlap the other work.
         var displayTask = Task.Run(() => Collect<IReadOnlyList<DisplayInfo>>("Display", [], () => DisplayInfoCollector.ReadDisplays(gpusTask.Result)));
         var diskHealthTask = Task.Run(() => Collect<IReadOnlyList<DiskHealth>?>("DiskHealth", null, () => DiskHealthCollector.Read(disksTask.Result, environmentTask.Result.IsAdministrator)));
 
-        Task.WaitAll(
-            environmentTask, gpusTask, disksTask, cpusTask, motherboardTask, memoryTask, networkCardsTask,
-            networkTask, systemDriveTask, peripheralsTask, computerTask, batteryTask, securityTask, localeTask,
-            reliabilityTask, displayTask, diskHealthTask);
+        HardwareInventory Snapshot()
+        {
+            var environment = environmentTask.Result;
+            var networkCards = networkCardsTask.Result;
+            return new HardwareInventory(
+                environment,
+                cpusTask.Result,
+                gpusTask.Result,
+                motherboardTask.Result,
+                memoryTask.Result,
+                disksTask.Result,
+                displayTask.Result,
+                diagnostics.OrderBy(entry => entry.Source, StringComparer.Ordinal).ToList(),
+                networkTask.Result,
+                systemDriveTask.Result,
+                diskHealthTask.IsCompletedSuccessfully ? diskHealthTask.Result : null,
+                peripheralsTask.IsCompletedSuccessfully ? peripheralsTask.Result : null,
+                networkCards.Where(card => !NetworkCollector.IsWirelessCard(card)).ToList(),
+                networkCards.Where(NetworkCollector.IsWirelessCard).ToList(),
+                computerTask.IsCompletedSuccessfully ? computerTask.Result : null,
+                batteryTask.IsCompletedSuccessfully ? batteryTask.Result : null,
+                securityTask.IsCompletedSuccessfully ? securityTask.Result : null,
+                localeTask.IsCompletedSuccessfully ? localeTask.Result : null,
+                reliabilityTask.IsCompletedSuccessfully ? reliabilityTask.Result : null);
+        }
 
-        var environment = environmentTask.Result;
-        var networkCards = networkCardsTask.Result;
-        return new HardwareInventory(
-            environment,
-            cpusTask.Result,
-            gpusTask.Result,
-            motherboardTask.Result,
-            memoryTask.Result,
-            disksTask.Result,
-            displayTask.Result,
-            diagnostics.OrderBy(entry => entry.Source, StringComparer.Ordinal).ToList(),
-            networkTask.Result,
-            systemDriveTask.Result,
-            diskHealthTask.Result,
-            peripheralsTask.Result,
-            networkCards.Where(card => !NetworkCollector.IsWirelessCard(card)).ToList(),
-            networkCards.Where(NetworkCollector.IsWirelessCard).ToList(),
-            computerTask.Result,
-            batteryTask.Result,
-            securityTask.Result,
-            localeTask.Result,
-            reliabilityTask.Result);
+        Task.WaitAll(environmentTask, gpusTask, disksTask, cpusTask, motherboardTask, memoryTask, networkCardsTask,
+            networkTask, systemDriveTask, displayTask);
+        onCoreReady?.Invoke(Snapshot());
+
+        Task.WaitAll(peripheralsTask, computerTask, batteryTask, securityTask, localeTask, reliabilityTask, diskHealthTask);
+        return Snapshot();
     }
 
     private static SystemDriveSpace? ReadSystemDrive()

@@ -34,7 +34,6 @@ internal enum MenuCommand
     Updates,
     About,
     FirstLanguage = 100,
-    FirstKeyboardLayout = 300,
 }
 
 /// <summary>

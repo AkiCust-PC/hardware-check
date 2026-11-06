@@ -216,6 +216,11 @@ internal sealed class MainForm : Form
         // Paint the shell and the "reading" placeholders before WMI work starts, so the window never appears as a
         // blank white surface on a slow first run.
         Refresh();
+        // The live monitor does not need the hardware inventory. Start it first so CPU/GPU/memory values appear while
+        // the slower WMI/disk enumeration is still running.
+        StartLiveMonitor();
+        StartActivityMonitor();
+        Refresh();
         _ = LoadHardwareAsync();
     }
 
@@ -924,12 +929,6 @@ internal sealed class MainForm : Form
         NativeMenu.AddItem(tools, MenuCommand.GameHud, _t["hud.toggle"]);
         NativeMenu.AddItem(tools, MenuCommand.TestWindow, _t["ui.testWindow"]);
         NativeMenu.AddItem(tools, MenuCommand.HardwareWindow, _t["ui.hardwareWindow"]);
-        NativeMenu.AddSeparator(tools);
-        var keyboardLayouts = NativeMenu.AddPopup(tools, _t["ui.keyboardLayout"]);
-        for (var index = 0; index < KeyboardLayouts.Choices.Count; index++)
-        {
-            NativeMenu.AddItem(keyboardLayouts, MenuCommand.FirstKeyboardLayout + index, KeyboardLayouts.Choices[index].Label(_t));
-        }
 
         menu.AddBarItem(MenuCommand.Settings, _t["ui.settings"]);
 
@@ -956,11 +955,6 @@ internal sealed class MainForm : Form
         NativeMenu.AddItem(help, MenuCommand.About, _t["ui.about"]);
 
         menu.SetRadio(MenuCommand.FirstLanguage, LanguageChoices.Length, MenuCommand.FirstLanguage + Array.FindIndex(LanguageChoices, choice => choice.Code == _t.Language));
-        var currentKeyboard = KeyboardLayouts.CurrentIndex();
-        if (currentKeyboard >= 0)
-        {
-            menu.SetRadio(MenuCommand.FirstKeyboardLayout, KeyboardLayouts.Choices.Count, MenuCommand.FirstKeyboardLayout + currentKeyboard);
-        }
 
         menu.Attach(Handle, _menu);
         _menu = menu;
@@ -968,13 +962,6 @@ internal sealed class MainForm : Form
 
     private void RunMenuCommand(int id)
     {
-        var keyboardIndex = id - (int)MenuCommand.FirstKeyboardLayout;
-        if (keyboardIndex >= 0 && keyboardIndex < KeyboardLayouts.Choices.Count)
-        {
-            ChangeKeyboardLayout(KeyboardLayouts.Choices[keyboardIndex]);
-            return;
-        }
-
         var languageIndex = id - (int)MenuCommand.FirstLanguage;
         if (languageIndex >= 0 && languageIndex < LanguageChoices.Length)
         {
@@ -1309,7 +1296,7 @@ internal sealed class MainForm : Form
             return;
         }
 
-        _hardware = await Task.Run(HardwareInfoService.Read);
+        _hardware = await Task.Run(() => HardwareInfoService.Read());
         if (IsDisposed || _isClosing)
         {
             return;
@@ -1590,7 +1577,8 @@ internal sealed class MainForm : Form
         }
 
         _phaseLabel.Text = _t["ui.loading"];
-        _hardware = await Task.Run(HardwareInfoService.Read);
+        IProgress<HardwareInventory> progress = new Progress<HardwareInventory>(ShowPartialHardware);
+        _hardware = await Task.Run(() => HardwareInfoService.Read(progress.Report));
         if (IsDisposed || _isClosing)
         {
             return;
@@ -1624,6 +1612,11 @@ internal sealed class MainForm : Form
 
     private void StartActivityMonitor()
     {
+        if (_activityMonitor is not null)
+        {
+            return;
+        }
+
         _activityMonitor = new ActivityMonitor();
         _activityMonitor.Sampled += snapshot => PostToUi(() => ShowActivity(snapshot));
         _activityMonitor.Start();
@@ -2011,6 +2004,23 @@ internal sealed class MainForm : Form
         _viewModelsButton.Checked = _settings.IsModelsOnlyView;
         _isApplyingView = false;
     }
+    /// <summary>Displays the core inventory while the slower diagnostic groups are still being read.</summary>
+    private void ShowPartialHardware(HardwareInventory hardware)
+    {
+        if (IsDisposed || _isClosing)
+        {
+            return;
+        }
+
+        if (hardware.Cpus.Count == 0 && hardware.Gpus.Count == 0 && hardware.Motherboard is null && hardware.Memory is null)
+        {
+            return;
+        }
+
+        _hardware = hardware;
+        RenderHardware();
+    }
+
     private void RenderHardware()
     {
         if (_hardware is null)
@@ -2618,21 +2628,6 @@ internal sealed class MainForm : Form
         {
             SetStatus(_t["ui.openFailed", exception.Message], isAlert: true);
         }
-    }
-
-    private void ChangeKeyboardLayout(KeyboardLayouts.Choice choice)
-    {
-        var result = KeyboardLayouts.Apply(choice);
-        if (!result.IsActivated)
-        {
-            SetStatus(_t["ui.keyboardLayoutFailed", choice.Label(_t)], isAlert: true);
-            return;
-        }
-
-        SetStatus(result.IsSystemDefault
-            ? _t["ui.keyboardLayoutChanged", choice.Label(_t)]
-            : _t["ui.keyboardLayoutCurrent", choice.Label(_t)]);
-        UpdateCommandStates();
     }
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
