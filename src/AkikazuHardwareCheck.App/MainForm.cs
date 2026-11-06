@@ -33,6 +33,7 @@ internal sealed class MainForm : Form
     // 16:10 desktop default. Resizing is independent in width and height, so no aspect-ratio lock is applied.
     private const int DEFAULT_CLIENT_WIDTH = 1280;
     private const int DEFAULT_CLIENT_HEIGHT = 800;
+    private const int WINDOW_STATE_SAVE_DELAY_MS = 500;
 
     private const int MONITOR_SECTION_HEIGHT = 340;
     private const int MONITOR_CARD_HEADER_HEIGHT = 28;
@@ -99,6 +100,7 @@ internal sealed class MainForm : Form
     private readonly Label _statusLabel = Ui.Label();
 
     private readonly System.Windows.Forms.Timer _clockTimer = new() { Interval = CLOCK_INTERVAL_MS };
+    private readonly System.Windows.Forms.Timer _windowStateTimer = new() { Interval = WINDOW_STATE_SAVE_DELAY_MS };
     private TableLayoutPanel? _rootPanel;
     private TableLayoutPanel? _bodyPanel;
     private TableLayoutPanel? _monitorPanel;
@@ -164,8 +166,8 @@ internal sealed class MainForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         // 16:10 default: wide enough for the two information columns without squeezing the monitor.
         ClientSize = new Size(LogicalToDeviceUnits(DEFAULT_CLIENT_WIDTH), LogicalToDeviceUnits(DEFAULT_CLIENT_HEIGHT));
-        // This tested size is also the minimum: both sides show their text, while width and height stay independent.
-        MinimumSize = Size;
+        // No hard minimum: the user may shrink until content needs wrapping or scrolling.
+        MinimumSize = Size.Empty;
         RestoreWindowState();
 
         WireEvents();
@@ -272,6 +274,7 @@ internal sealed class MainForm : Form
         }
 
         SaveWindowState();
+        _windowStateTimer.Dispose();
         _clockTimer.Dispose();
         _backgroundSource?.Dispose();
         StopLiveMonitor();
@@ -681,6 +684,19 @@ internal sealed class MainForm : Form
         {
             _isResizing = false;
             RenderBackground();
+            ScheduleWindowStateSave();
+        };
+        Move += (_, _) =>
+        {
+            if (WindowState == FormWindowState.Normal && !_isExiting && _bodyPanel is not null)
+            {
+                ScheduleWindowStateSave();
+            }
+        };
+        _windowStateTimer.Tick += (_, _) =>
+        {
+            _windowStateTimer.Stop();
+            SaveWindowState();
         };
         _clockTimer.Tick += (_, _) => _hardwareList.UpdateValue(_t["summary.time"], HardwareSummary.TimeText(DateTimeOffset.Now, TimeZoneInfo.Local));
     }
@@ -920,6 +936,17 @@ internal sealed class MainForm : Form
         UpdateCommandStates();
     }
 
+    private void ScheduleWindowStateSave()
+    {
+        if (!IsHandleCreated || _isExiting)
+        {
+            return;
+        }
+
+        _windowStateTimer.Stop();
+        _windowStateTimer.Start();
+    }
+
     private void EnsureSomePanelVisible()
     {
         if (_settings.IsHardwarePanelHidden && _settings.IsMonitorPanelHidden && _settings.IsTestPanelHidden)
@@ -954,14 +981,14 @@ internal sealed class MainForm : Form
         var cardRows = oneColumn ? cards.Length : 2;
         for (var row = 0; row < cardRows; row++)
         {
-            if (oneColumn && cards[row] == _fanCard)
+            if (oneColumn)
             {
-                // The fan card is a compact footer, not a full-height monitoring card.
-                panel.RowStyles.Add(new RowStyle(SizeType.Absolute, _fanCard.Visible ? LogicalToDeviceUnits(150) : 0));
+                // Absolute heights keep the value rows readable; the panel scrolls only when the window is too short.
+                panel.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(110)));
             }
             else
             {
-                panel.RowStyles.Add(new RowStyle(SizeType.Percent, oneColumn ? 100f / 3 : 50f));
+                panel.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
             }
         }
 
@@ -979,7 +1006,35 @@ internal sealed class MainForm : Form
             panel.SetColumnSpan(_systemCard, _fanCard.Visible ? 1 : 2);
         }
 
+        panel.AutoScroll = oneColumn;
+        panel.Resize -= SizeSingleColumnMonitor;
+        if (oneColumn)
+        {
+            panel.Resize += SizeSingleColumnMonitor;
+            SizeSingleColumnMonitor(panel, EventArgs.Empty);
+        }
+
         panel.ResumeLayout();
+    }
+
+    private void SizeSingleColumnMonitor(object? sender, EventArgs e)
+    {
+        if (_monitorPanel is not { ColumnCount: 1 } panel || panel.RowStyles.Count < 4)
+        {
+            return;
+        }
+
+        var available = panel.ClientSize.Height - (_chartRow?.Height ?? 0);
+        var fanHeight = _fanCard is { Visible: true } ? LogicalToDeviceUnits(150) : 0;
+        var cardHeight = Math.Max(LogicalToDeviceUnits(110), (available - fanHeight) / 3);
+        for (var index = 0; index < 3; index++)
+        {
+            panel.RowStyles[index].SizeType = SizeType.Absolute;
+            panel.RowStyles[index].Height = cardHeight;
+        }
+
+        panel.RowStyles[3].SizeType = SizeType.Absolute;
+        panel.RowStyles[3].Height = fanHeight;
     }
 
     private void RestoreWindowState()
@@ -992,8 +1047,8 @@ internal sealed class MainForm : Form
             var bounds = new Rectangle(
                 _settings.WindowX ?? Left,
                 _settings.WindowY ?? Top,
-                Math.Max(MinimumSize.Width, width),
-                Math.Max(MinimumSize.Height, height));
+                Math.Max(1, width),
+                Math.Max(1, height));
             if (!Screen.AllScreens.Any(screen => screen.WorkingArea.IntersectsWith(bounds)))
             {
                 var area = Screen.PrimaryScreen?.WorkingArea ?? SystemInformation.WorkingArea;
