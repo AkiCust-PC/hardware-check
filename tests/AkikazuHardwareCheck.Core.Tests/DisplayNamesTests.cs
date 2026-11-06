@@ -40,7 +40,7 @@ public class DisplayNamesTests
         Assert.Equal("ASUS ROG STRIX B860-G GAMING WIFI BIOS 1801 2025-09-12", Value(Hardware(), "主板"));
         Assert.Equal("G.Skill DDR5 48GB (24GB × 2) 8400MT/s F5-8400J4052G24G", Value(Hardware(), "内存"));
         Assert.Equal("Crucial CT2000T700SSD3 2TB NVMe SSD PCIe 5.0 x4", Value(Hardware(), "硬盘"));
-        Assert.Equal("LG Ultra HD 3840 × 2160 60Hz 27.2英寸 DisplayPort Intel(R) Arc(TM) Pro B60 Graphics (独立显卡)", Value(Hardware(), "显示器"));
+        Assert.Equal("LG Ultra HD 3840 × 2160 60Hz 27.2英寸 独立显卡 DisplayPort", Value(Hardware(), "显示器"));
         Assert.Equal("Wi-Fi 连接 2.9Gbps", Value(Hardware(), "网络"));
         Assert.Equal("已用 600GB / 共 2TB", Value(Hardware(), "系统盘空间"));
         Assert.All(lines, line => Assert.DoesNotContain("|", line.Value));

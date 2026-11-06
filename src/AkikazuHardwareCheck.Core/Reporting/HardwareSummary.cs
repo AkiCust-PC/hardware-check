@@ -311,12 +311,12 @@ public static class HardwareSummary
 
     private static string FormatDisplay(Translator t, DisplayInfo display, string unavailable, HardwareInventory hardware)
     {
-        var connectedGpu = display.ConnectedGpu is { } name
+        var connectedGpuKind = display.ConnectedGpu is { } name
             ? hardware.Gpus.FirstOrDefault(gpu => gpu.Model == name)?.Kind switch
             {
-                GpuKind.Integrated => $"{name} ({t["gpu.kind.integrated"]})",
-                GpuKind.Discrete => $"{name} ({t["gpu.kind.discrete"]})",
-                _ => name,
+                GpuKind.Integrated => t["gpu.kind.integrated"],
+                GpuKind.Discrete => t["gpu.kind.discrete"],
+                _ => null,
             }
             : null;
         string?[] parts =
@@ -325,8 +325,8 @@ public static class HardwareSummary
             display.WidthPixels is { } width && display.HeightPixels is { } height ? $"{width} × {height}" : null,
             display.RefreshRateHz is { } rate ? $"{Math.Round(rate).ToString(CultureInfo.InvariantCulture)}Hz" : null,
             display.DiagonalInches is { } inches ? t["summary.inches", inches.ToString("0.#", CultureInfo.InvariantCulture)] : null,
+            connectedGpuKind,
             DisplayNames.Connection(t, display.Connection),
-            connectedGpu,
         ];
         return string.Join(" ", parts.Where(part => part is not null));
     }
