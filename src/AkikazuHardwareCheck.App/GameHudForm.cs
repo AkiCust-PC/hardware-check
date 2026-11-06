@@ -9,13 +9,17 @@ internal sealed class GameHudForm : Form
 {
     private readonly Translator _t;
     private readonly Func<LiveSnapshot> _readSnapshot;
+    private readonly int _fontSize;
+    private readonly Color _color;
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 1000 };
     private LiveSnapshot? _sample;
 
-    public GameHudForm(Translator t, Func<LiveSnapshot> readSnapshot, Font font)
+    public GameHudForm(Translator t, Func<LiveSnapshot> readSnapshot, Font font, int fontSize, Color color)
     {
         _t = t;
         _readSnapshot = readSnapshot;
+        _fontSize = Math.Clamp(fontSize, 8, 32);
+        _color = color;
         Font = font;
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.Manual;
@@ -73,9 +77,9 @@ internal sealed class GameHudForm : Form
             return;
         }
 
-        using var font = new Font("Segoe UI", 12f, FontStyle.Bold, GraphicsUnit.Point);
+        using var font = new Font("Segoe UI", _fontSize, FontStyle.Bold, GraphicsUnit.Point);
         using var shadow = new SolidBrush(Color.FromArgb(190, 0, 0, 0));
-        using var foreground = new SolidBrush(Color.White);
+        using var foreground = new SolidBrush(_color);
         var size = e.Graphics.MeasureString(text, font);
         var x = Math.Max(4f, (ClientSize.Width - size.Width) / 2f);
         e.Graphics.DrawString(text, font, shadow, x + 1, 1);

@@ -62,6 +62,8 @@ public sealed record AppSettings(
     int FloatingEdge = 0,
     bool FloatingInfoVisible = true,
     bool HudEnabled = false,
+    int HudFontSize = 12,
+    int HudColorArgb = unchecked((int)0xFFFFFFFF),
     bool RulerEnabled = false,
     bool CrosshairEnabled = false,
     int CrosshairShape = 1,

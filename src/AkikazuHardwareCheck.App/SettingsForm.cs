@@ -28,6 +28,8 @@ internal sealed class SettingsForm : Form
     private readonly CheckBox _startWithWindows = Option();
     private readonly CheckBox _alwaysOnTop = Option();
     private readonly CheckBox _crosshairEnabled = Option();
+    private readonly NumericUpDown _hudFont = new() { Minimum = 8, Maximum = 32, Margin = new Padding(0, 0, 0, Ui.SPACING) };
+    private Color _hudColor;
     private readonly Translator _t;
     private CrosshairSettings _crosshair;
 
@@ -58,6 +60,8 @@ internal sealed class SettingsForm : Form
         _startWithWindows.Checked = settings.StartWithWindows || StartupRegistration.IsEnabled();
         _alwaysOnTop.Checked = settings.IsAlwaysOnTop;
         _crosshairEnabled.Checked = settings.CrosshairEnabled;
+        _hudFont.Value = Math.Clamp(settings.HudFontSize, 8, 32);
+        _hudColor = Color.FromArgb(settings.HudColorArgb);
 
         var tabs = new TabControl
         {
@@ -69,6 +73,7 @@ internal sealed class SettingsForm : Form
         tabs.TabPages.Add(BuildGeneralPage(t));
         tabs.TabPages.Add(BuildTestPage(t));
         tabs.TabPages.Add(BuildCrosshairPage(t));
+        tabs.TabPages.Add(BuildGamePage(t));
 
         var okButton = Ui.Button();
         okButton.Text = t["ui.ok"];
@@ -109,6 +114,8 @@ internal sealed class SettingsForm : Form
         CrosshairThickness = _crosshair.Thickness,
         CrosshairGap = _crosshair.Gap,
         CrosshairOpacity = _crosshair.Opacity,
+        HudFontSize = (int)_hudFont.Value,
+        HudColorArgb = _hudColor.ToArgb(),
     };
 
     private TabPage BuildGeneralPage(Translator t)
@@ -167,6 +174,26 @@ internal sealed class SettingsForm : Form
         layout.Controls.Add(hint, 0, row);
         layout.SetColumnSpan(hint, 2);
         page.Controls.Add(layout);
+        return page;
+    }
+
+    private TabPage BuildGamePage(Translator t)
+    {
+        var page = new TabPage(t["settings.game"]);
+        var colorButton = Ui.Button();
+        colorButton.Text = t["hud.color"];
+        colorButton.Click += (_, _) =>
+        {
+            using var dialog = new ColorDialog { Color = _hudColor, FullOpen = true };
+            if (dialog.ShowDialog(this) == DialogResult.OK)
+            {
+                _hudColor = dialog.Color;
+            }
+        };
+        var fields = Fields();
+        AddField(fields, t["hud.fontSize"], _hudFont);
+        AddField(fields, t["hud.color"], colorButton);
+        page.Controls.Add(fields);
         return page;
     }
 

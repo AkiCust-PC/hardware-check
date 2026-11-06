@@ -1629,7 +1629,12 @@ internal sealed class MainForm : Form
             return;
         }
 
-        _hudForm = new GameHudForm(_t, CurrentLiveSnapshot, Font);
+        _hudForm = new GameHudForm(
+            _t,
+            CurrentLiveSnapshot,
+            Font,
+            _settings.HudFontSize,
+            Color.FromArgb(_settings.HudColorArgb));
         _hudForm.FormClosed += (_, _) => _hudForm = null;
         _hudForm.Show();
     }
@@ -2529,6 +2534,7 @@ internal sealed class MainForm : Form
         {
             SaveSettings(settings);
             UpdateCrosshair();
+            UpdateHud();
             UpdateCommandStates();
         }
     }
