@@ -5,7 +5,7 @@ using AkikazuHardwareCheck.Core.Localization;
 
 namespace AkikazuHardwareCheck.App;
 
-/// <summary>Read-only startup, software and process lists plus shortcuts to the Windows tools staff already use.</summary>
+/// <summary>Read-only startup, software and process lists, event summary, cleanup and system-tool shortcuts.</summary>
 internal sealed class MaintenanceForm : Form
 {
     private readonly Translator _t;

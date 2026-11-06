@@ -230,7 +230,7 @@ internal sealed class MainForm : Form
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
-        if (!_isExiting && !_closeAfterTest && _settings is { CloseToTray: true, ShowTrayIcon: true } && !IsTestRunning)
+        if (!_isExiting && !_closeAfterTest && e.CloseReason == CloseReason.UserClosing && _settings is { CloseToTray: true, ShowTrayIcon: true } && !IsTestRunning)
         {
             e.Cancel = true;
             HideToTray(showHint: true);
