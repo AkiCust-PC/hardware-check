@@ -26,6 +26,7 @@ internal sealed class SettingsForm : Form
     private readonly CheckBox _showTrayIcon = Option();
     private readonly CheckBox _closeToTray = Option();
     private readonly CheckBox _startWithWindows = Option();
+    private readonly CheckBox _alwaysOnTop = Option();
     private readonly CheckBox _crosshairEnabled = Option();
     private readonly Translator _t;
     private CrosshairSettings _crosshair;
@@ -55,6 +56,7 @@ internal sealed class SettingsForm : Form
         _showTrayIcon.Checked = settings.ShowTrayIcon;
         _closeToTray.Checked = settings.CloseToTray;
         _startWithWindows.Checked = settings.StartWithWindows || StartupRegistration.IsEnabled();
+        _alwaysOnTop.Checked = settings.IsAlwaysOnTop;
         _crosshairEnabled.Checked = settings.CrosshairEnabled;
 
         var tabs = new TabControl
@@ -99,6 +101,7 @@ internal sealed class SettingsForm : Form
         ShowTrayIcon = _showTrayIcon.Checked,
         CloseToTray = _closeToTray.Checked,
         StartWithWindows = _startWithWindows.Checked,
+        IsAlwaysOnTop = _alwaysOnTop.Checked,
         CrosshairEnabled = _crosshairEnabled.Checked,
         CrosshairShape = (int)_crosshair.Shape,
         CrosshairColorArgb = _crosshair.Color.ToArgb(),
@@ -123,6 +126,7 @@ internal sealed class SettingsForm : Form
         AddField(fields, t["ui.showTrayIcon"], _showTrayIcon);
         AddField(fields, t["ui.closeToTray"], _closeToTray);
         AddField(fields, t["ui.startWithWindows"], _startWithWindows);
+        AddField(fields, t["ui.alwaysOnTop"], _alwaysOnTop);
         page.Controls.Add(fields);
         return page;
     }

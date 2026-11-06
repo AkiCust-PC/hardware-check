@@ -359,6 +359,7 @@
   "ui.sensorReads": "感測器讀取 {0} 次，失敗 {1} 次",
   "ui.settings": "設定",
   "ui.testWindow": "測試視窗",
+  "ui.hardwareWindow": "硬體資訊",
   "ui.resultWindow": "結果視窗",
   "ui.showTrayIcon": "托盤圖示",
   "ui.closeToTray": "關閉後背景執行",

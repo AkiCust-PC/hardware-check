@@ -142,6 +142,8 @@ internal sealed class MainForm : Form
     private CrosshairOverlayForm? _crosshairForm;
     private TestWorkspaceForm? _testWorkspace;
     private bool _testWorkspaceRestoring;
+    private HardwareWindowForm? _hardwareWindow;
+    private bool _hardwareWindowRestoring;
     private ActivitySnapshot? _activitySnapshot;
     private TestRunResult? _lastRun;
     private MemoryTestResult? _memoryResult;
@@ -280,6 +282,8 @@ internal sealed class MainForm : Form
 
         _testWorkspace?.Close();
         RestoreTestWorkspace();
+        _hardwareWindow?.Close();
+        RestoreHardwareWindow();
         SaveWindowState();
         _windowStateTimer.Dispose();
         _clockTimer.Dispose();
@@ -784,7 +788,7 @@ internal sealed class MainForm : Form
         NativeMenu.AddSeparator(tools);
         NativeMenu.AddItem(tools, MenuCommand.Crosshair, _t["crosshair.toggle"]);
         NativeMenu.AddItem(tools, MenuCommand.TestWindow, _t["ui.testWindow"]);
-        NativeMenu.AddItem(tools, MenuCommand.ResultWindow, _t["ui.resultWindow"]);
+        NativeMenu.AddItem(tools, MenuCommand.HardwareWindow, _t["ui.hardwareWindow"]);
 
         var settings = menu.AddSubmenu(_t["ui.menuSettings"]);
         NativeMenu.AddItem(settings, MenuCommand.Settings, _t["ui.settings"]);
@@ -792,7 +796,6 @@ internal sealed class MainForm : Form
         var view = menu.AddSubmenu(_t["ui.menuView"]);
         NativeMenu.AddItem(view, MenuCommand.ShowHardware, _t["ui.showHardware"]);
         NativeMenu.AddItem(view, MenuCommand.ShowMonitor, _t["ui.showMonitor"]);
-        NativeMenu.AddItem(view, MenuCommand.AlwaysOnTop, _t["ui.alwaysOnTop"]);
         NativeMenu.AddItem(view, MenuCommand.Floating, _t["tray.floating"]);
         NativeMenu.AddSeparator(view);
         NativeMenu.AddItem(view, MenuCommand.BackgroundColor, _t["ui.backgroundColor"]);
@@ -891,10 +894,10 @@ internal sealed class MainForm : Form
                 ToggleCrosshair();
                 break;
             case MenuCommand.TestWindow:
-                ShowTestWorkspace(resultsOnly: false);
+                ShowTestWorkspace();
                 break;
-            case MenuCommand.ResultWindow:
-                ShowTestWorkspace(resultsOnly: true);
+            case MenuCommand.HardwareWindow:
+                ShowHardwareWindow();
                 break;
             case MenuCommand.Exit:
                 ExitApplication();
@@ -908,11 +911,6 @@ internal sealed class MainForm : Form
                 SaveSettings(_settings with { IsMonitorPanelHidden = !_settings.IsMonitorPanelHidden });
                 EnsureSomePanelVisible();
                 ApplyPanels();
-                break;
-            case MenuCommand.AlwaysOnTop:
-                SaveSettings(_settings with { IsAlwaysOnTop = !_settings.IsAlwaysOnTop });
-                TopMost = _settings.IsAlwaysOnTop;
-                UpdateCommandStates();
                 break;
             case MenuCommand.Guide:
                 OpenInShell($"{AboutForm.REPOSITORY}#readme");
@@ -1176,7 +1174,7 @@ internal sealed class MainForm : Form
 
         var width = Math.Max(0, body.ClientSize.Width);
         var showsPrimary = _rightPanel.Visible;
-        var showsSecondary = hardware.Visible;
+        var showsSecondary = hardware.Visible && hardware.Parent == body;
         var primaryWidth = !showsPrimary ? 0 : showsSecondary ? width / 2 : width;
         var secondaryWidth = Math.Max(0, width - primaryWidth);
         body.ColumnStyles[0].SizeType = SizeType.Absolute;
@@ -1599,7 +1597,7 @@ internal sealed class MainForm : Form
         _crosshairForm.Show();
     }
 
-    private void ShowTestWorkspace(bool resultsOnly)
+    private void ShowTestWorkspace()
     {
         if (_testWorkspace is { IsDisposed: false } existing)
         {
@@ -1619,19 +1617,61 @@ internal sealed class MainForm : Form
 
         _controlGroup.Visible = true;
         _resultGroup.Visible = true;
-        var form = new TestWorkspaceForm(_t, resultsOnly ? null : _controlGroup, _resultGroup, Font);
+        var form = new TestWorkspaceForm(_t, _controlGroup, _resultGroup, Font);
         form.FormClosing += (_, _) => RestoreTestWorkspace();
         form.FormClosed += (_, _) => _testWorkspace = null;
         _testWorkspace = form;
-        if (!resultsOnly)
-        {
-            _rightPanel.RowStyles[1].Height = 0;
-        }
-
+        _rightPanel.RowStyles[1].Height = 0;
         _rightPanel.RowStyles[2].SizeType = SizeType.Absolute;
         _rightPanel.RowStyles[2].Height = 0;
         ApplyBodyWidths();
         form.Show(this);
+    }
+
+    private void ShowHardwareWindow()
+    {
+        if (_hardwareWindow is { IsDisposed: false } existing)
+        {
+            existing.Activate();
+            return;
+        }
+
+        if (_hardwareGroup is null)
+        {
+            return;
+        }
+
+        _hardwareGroup.Visible = true;
+        var form = new HardwareWindowForm(_t, _hardwareGroup, Font);
+        form.FormClosing += (_, _) => RestoreHardwareWindow();
+        form.FormClosed += (_, _) => _hardwareWindow = null;
+        _hardwareWindow = form;
+        ApplyBodyWidths();
+        form.Show(this);
+    }
+
+    private void RestoreHardwareWindow()
+    {
+        if (_hardwareWindow is null || _hardwareWindowRestoring)
+        {
+            return;
+        }
+
+        _hardwareWindowRestoring = true;
+        try
+        {
+            if (_bodyPanel is { } body && _hardwareGroup is { } hardware && hardware.Parent != body)
+            {
+                body.Controls.Add(hardware, 1, 0);
+            }
+
+            _hardwareWindow = null;
+            ApplyPanels();
+        }
+        finally
+        {
+            _hardwareWindowRestoring = false;
+        }
     }
 
     private void RestoreTestWorkspace()
@@ -2161,7 +2201,6 @@ internal sealed class MainForm : Form
             menu.SetEnabled(MenuCommand.Maintenance, true);
             menu.SetChecked(MenuCommand.ShowHardware, !_settings.IsHardwarePanelHidden);
             menu.SetChecked(MenuCommand.ShowMonitor, !_settings.IsMonitorPanelHidden);
-            menu.SetChecked(MenuCommand.AlwaysOnTop, _settings.IsAlwaysOnTop);
             menu.SetChecked(MenuCommand.Crosshair, _settings.CrosshairEnabled);
             menu.SetEnabled(MenuCommand.RestartToFirmware, !isRunning);
             for (var index = 0; index < LanguageChoices.Length; index++)

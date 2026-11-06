@@ -359,6 +359,7 @@
   "ui.sensorReads": "センサー読み取り {0} 回、失敗 {1} 回",
   "ui.settings": "設定",
   "ui.testWindow": "テストウィンドウ",
+  "ui.hardwareWindow": "ハードウェア情報",
   "ui.resultWindow": "結果ウィンドウ",
   "ui.showTrayIcon": "トレイアイコン",
   "ui.closeToTray": "閉じたらバックグラウンド",
