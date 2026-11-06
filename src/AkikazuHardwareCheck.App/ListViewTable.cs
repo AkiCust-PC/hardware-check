@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.InteropServices;
 using AkikazuHardwareCheck.Core.Localization;
 
@@ -182,7 +183,9 @@ internal static class ListViewTable
                 return 1;
             }
 
-            if (left is string leftText && right is string rightText && double.TryParse(leftText, out var leftNumber) && double.TryParse(rightText, out var rightNumber))
+            if (left is string leftText && right is string rightText
+                && double.TryParse(leftText, NumberStyles.Float, CultureInfo.InvariantCulture, out var leftNumber)
+                && double.TryParse(rightText, NumberStyles.Float, CultureInfo.InvariantCulture, out var rightNumber))
             {
                 return leftNumber.CompareTo(rightNumber);
             }
