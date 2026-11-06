@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Management;
 using AkikazuHardwareCheck.Core.Localization;
@@ -5,21 +6,21 @@ using AkikazuHardwareCheck.Core.Localization;
 namespace AkikazuHardwareCheck.App;
 
 /// <summary>Lists camera devices and opens Windows Camera for a live preview; no capture is stored.</summary>
-internal sealed class CameraTestForm : Form
+internal sealed class CameraTestView : UserControl
 {
+    private const string CAMERA_URI = "microsoft.windows.camera:";
+    private const string CAMERA_APP = @"shell:AppsFolder\Microsoft.WindowsCamera_8wekyb3d8bbwe!App";
+
     private readonly Translator _t;
     private readonly ListView _list = new() { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true };
     private readonly Label _status = Ui.Label();
 
-    public CameraTestForm(Translator t, Font font)
+    public CameraTestView(Translator t, Font font)
     {
         _t = t;
-        Text = t["cameraTest.title"];
-        Icon = Ui.AppIcon;
         Font = font;
-        StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(LogicalToDeviceUnits(620), LogicalToDeviceUnits(360));
-        MinimumSize = new Size(LogicalToDeviceUnits(520), LogicalToDeviceUnits(300));
+        Dock = DockStyle.Fill;
+        Padding = new Padding(Ui.SPACING);
 
         _list.Columns.Add(t["cameraTest.name"], LogicalToDeviceUnits(420));
         _list.Columns.Add(t["cameraTest.class"], LogicalToDeviceUnits(140));
@@ -31,7 +32,7 @@ internal sealed class CameraTestForm : Form
         open.Click += (_, _) => OpenCamera();
         var buttons = Ui.Flow();
         buttons.Controls.AddRange([refresh, open]);
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(Ui.SPACING) };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Margin = new Padding(0) };
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -39,8 +40,7 @@ internal sealed class CameraTestForm : Form
         root.Controls.Add(buttons, 0, 1);
         root.Controls.Add(_status, 0, 2);
         Controls.Add(root);
-        Ui.ScaleButtons(this);
-        Shown += (_, _) => LoadDevices();
+        Load += (_, _) => LoadDevices();
     }
 
     private void LoadDevices()
@@ -66,13 +66,27 @@ internal sealed class CameraTestForm : Form
 
     private void OpenCamera()
     {
+        if (TryStart(CAMERA_URI) || TryStart(CAMERA_APP))
+        {
+            _status.Text = _t["cameraTest.opened"];
+            return;
+        }
+
+        _status.Text = _t["cameraTest.openFailed", CAMERA_URI];
+    }
+
+    private static bool TryStart(string target)
+    {
         try
         {
-            Process.Start(new ProcessStartInfo("ms-camera:") { UseShellExecute = true })?.Dispose();
+            using var process = target == CAMERA_APP
+                ? Process.Start(new ProcessStartInfo("explorer.exe", target) { UseShellExecute = true })
+                : Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
+            return process is not null;
         }
-        catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
+        catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
         {
-            _status.Text = _t["cameraTest.openFailed", exception.Message];
+            return false;
         }
     }
 }

@@ -15,6 +15,7 @@ internal sealed class PeripheralTestForm : Form
     private readonly HardwareInventory _hardware;
     private readonly KeyboardTestView _keyboard;
     private readonly MouseTestView _mouse;
+    private readonly CameraTestView _camera;
     private readonly TabControl _tabs;
     private readonly Label _gamepadStatus = Ui.Label();
     private readonly Label _gamepadButtons = Ui.Label();
@@ -33,6 +34,7 @@ internal sealed class PeripheralTestForm : Form
         _audio = audio;
         _keyboard = new KeyboardTestView(t, font);
         _mouse = new MouseTestView(t, font);
+        _camera = new CameraTestView(t, font);
         Font = font;
         Icon = Ui.AppIcon;
         Text = t["peripheralTest.title"];
@@ -46,6 +48,7 @@ internal sealed class PeripheralTestForm : Form
         _tabs.TabPages.Add(BuildDisplayPage());
         _tabs.TabPages.Add(BuildKeyboardPage());
         _tabs.TabPages.Add(BuildMousePage());
+        _tabs.TabPages.Add(BuildCameraPage());
         _tabs.TabPages.Add(BuildGamepadPage());
 
         var close = Ui.Button();
@@ -186,6 +189,9 @@ internal sealed class PeripheralTestForm : Form
 
     private TabPage BuildMousePage() =>
         new(_t["peripheralTest.mouse"]) { Padding = new Padding(Ui.SPACING), UseVisualStyleBackColor = true, Controls = { _mouse } };
+
+    private TabPage BuildCameraPage() =>
+        new(_t["peripheralTest.camera"]) { Padding = new Padding(Ui.SPACING), UseVisualStyleBackColor = true, Controls = { _camera } };
 
     private TabPage BuildGamepadPage()
     {

@@ -953,7 +953,6 @@ internal sealed class MainForm : Form
         NativeMenu.AddItem(tools, MenuCommand.JunkCleanup, _t["ui.junkCleanup"]);
         NativeMenu.AddItem(tools, MenuCommand.NetworkSpeedTest, _t["networkTest.title"]);
         NativeMenu.AddItem(tools, MenuCommand.DisplayInfo, _t["displayInfo.title"]);
-        NativeMenu.AddItem(tools, MenuCommand.CameraTest, _t["cameraTest.title"]);
         NativeMenu.AddSeparator(tools);
         NativeMenu.AddItem(tools, MenuCommand.Crosshair, _t["crosshair.toggle"]);
         NativeMenu.AddItem(tools, MenuCommand.ScreenRuler, _t["ruler.toggle"]);
@@ -1053,13 +1052,6 @@ internal sealed class MainForm : Form
                 break;
             case MenuCommand.DisplayInfo:
                 using (var form = new DisplayInfoForm(_t, Font))
-                {
-                    form.ShowDialog(this);
-                }
-
-                break;
-            case MenuCommand.CameraTest:
-                using (var form = new CameraTestForm(_t, Font))
                 {
                     form.ShowDialog(this);
                 }

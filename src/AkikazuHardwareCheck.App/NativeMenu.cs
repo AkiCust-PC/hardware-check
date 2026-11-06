@@ -22,7 +22,6 @@ internal enum MenuCommand
     JunkCleanup,
     NetworkSpeedTest,
     DisplayInfo,
-    CameraTest,
     ShowHardware,
     ShowMonitor,
     ShowTests,

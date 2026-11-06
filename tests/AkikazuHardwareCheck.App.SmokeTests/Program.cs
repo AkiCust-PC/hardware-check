@@ -34,7 +34,6 @@ internal static class Program
             {
                 var t = Translator.Load(language);
                 using var font = Ui.FontFor(language);
-                using var camera = new CameraTestForm(t, font);
                 using var settings = new SettingsForm(t, new AppSettings(), font);
                 using var network = new NetworkSpeedTestForm(t, font);
                 using var display = new DisplayInfoForm(t, font);
