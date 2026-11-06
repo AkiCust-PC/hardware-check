@@ -18,9 +18,6 @@ namespace AkikazuHardwareCheck.Core.Configuration;
 /// <param name="BackgroundZoom">Picture size relative to just covering the window.</param>
 /// <param name="BackgroundPanX">Picture shift as a share of the window width.</param>
 /// <param name="BackgroundPanY">Picture shift as a share of the window height.</param>
-/// <param name="IsHardwarePanelHidden">Whether the hardware list is hidden.</param>
-/// <param name="IsMonitorPanelHidden">Whether the live monitor cards are hidden.</param>
-/// <param name="IsTestPanelHidden">Whether the test controls and results are hidden.</param>
 /// <param name="IsAlwaysOnTop">Whether the window stays above others.</param>
 /// <param name="ShowTrayIcon">Whether the notification-area icon is shown.</param>
 /// <param name="CloseToTray">Whether closing the main window hides it instead of exiting.</param>
@@ -49,9 +46,6 @@ public sealed record AppSettings(
     double BackgroundZoom = 1,
     double BackgroundPanX = 0,
     double BackgroundPanY = 0,
-    bool IsHardwarePanelHidden = false,
-    bool IsMonitorPanelHidden = false,
-    bool IsTestPanelHidden = false,
     bool IsAlwaysOnTop = false,
     bool ShowTrayIcon = true,
     bool CloseToTray = true,
@@ -64,7 +58,8 @@ public sealed record AppSettings(
     int? FloatingLeft = null,
     int? FloatingTop = null,
     bool FloatingSnapped = false,
-    bool FloatingInfoVisible = true)
+    bool FloatingInfoVisible = true,
+    int MainTabIndex = 0)
 {
     private const string FOLDER_NAME = "AkikazuHardwareCheck";
 

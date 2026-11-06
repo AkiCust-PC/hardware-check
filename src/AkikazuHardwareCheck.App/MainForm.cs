@@ -101,6 +101,10 @@ internal sealed class MainForm : Form
     private readonly System.Windows.Forms.Timer _clockTimer = new() { Interval = CLOCK_INTERVAL_MS };
     private TableLayoutPanel? _rootPanel;
     private TableLayoutPanel? _bodyPanel;
+    private RadioButton? _hardwareTab;
+    private RadioButton? _monitorTab;
+    private RadioButton? _testTab;
+    private bool _applyingTabs;
     private TableLayoutPanel? _monitorPanel;
     private Control? _systemCard;
     private Control? _fanCard;
@@ -446,7 +450,68 @@ internal sealed class MainForm : Form
         body.Controls.Add(_rightPanel, 1, 0);
         body.Resize += (_, _) => ApplyBodyWidths();
         _bodyPanel = body;
-        return body;
+
+        var wrapper = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Margin = new Padding(0) };
+        wrapper.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        wrapper.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        wrapper.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        wrapper.Controls.Add(BuildTabBar(), 0, 0);
+        wrapper.Controls.Add(body, 0, 1);
+        return wrapper;
+    }
+
+    private Control BuildTabBar()
+    {
+        var bar = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 3,
+            RowCount = 1,
+            AutoSize = true,
+            Margin = new Padding(0, 0, 0, Ui.SPACING),
+        };
+        for (var index = 0; index < 3; index++)
+        {
+            bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100 / 3f));
+        }
+
+        _hardwareTab = BuildTabButton(_t["tab.hardware"], 0);
+        _monitorTab = BuildTabButton(_t["tab.monitor"], 1);
+        _testTab = BuildTabButton(_t["tab.tests"], 2);
+        bar.Controls.Add(_hardwareTab, 0, 0);
+        bar.Controls.Add(_monitorTab, 1, 0);
+        bar.Controls.Add(_testTab, 2, 0);
+        return bar;
+    }
+
+    private RadioButton BuildTabButton(string text, int index)
+    {
+        var button = new RadioButton
+        {
+            Text = text,
+            Appearance = Appearance.Button,
+            AutoSize = false,
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleCenter,
+            MinimumSize = new Size(0, Ui.BUTTON_MIN_HEIGHT),
+            Margin = new Padding(0, 0, index < 2 ? Ui.SPACING : 0, 0),
+            UseVisualStyleBackColor = true,
+        };
+        button.CheckedChanged += (_, _) =>
+        {
+            if (!_applyingTabs && button.Checked)
+            {
+                SelectMainTab(index);
+            }
+        };
+        return button;
+    }
+
+    private void SelectMainTab(int index)
+    {
+        index = Math.Clamp(index, 0, 2);
+        SaveSettings(_settings with { MainTabIndex = index });
+        ApplyPanels();
     }
 
     /// <summary>The hardware list fills the left side; the third information level stays at its bottom.</summary>
@@ -731,9 +796,9 @@ internal sealed class MainForm : Form
         NativeMenu.AddItem(settings, MenuCommand.Settings, _t["ui.settings"]);
 
         var view = menu.AddSubmenu(_t["ui.menuView"]);
-        NativeMenu.AddItem(view, MenuCommand.ShowHardware, _t["ui.showHardware"]);
-        NativeMenu.AddItem(view, MenuCommand.ShowMonitor, _t["ui.showMonitor"]);
-        NativeMenu.AddItem(view, MenuCommand.ShowTests, _t["ui.showTests"]);
+        NativeMenu.AddItem(view, MenuCommand.ShowHardware, _t["tab.hardware"]);
+        NativeMenu.AddItem(view, MenuCommand.ShowMonitor, _t["tab.monitor"]);
+        NativeMenu.AddItem(view, MenuCommand.ShowTests, _t["tab.tests"]);
         NativeMenu.AddItem(view, MenuCommand.AlwaysOnTop, _t["ui.alwaysOnTop"]);
         NativeMenu.AddItem(view, MenuCommand.Floating, _t["tray.floating"]);
         NativeMenu.AddSeparator(view);
@@ -813,19 +878,13 @@ internal sealed class MainForm : Form
                 ExitApplication();
                 break;
             case MenuCommand.ShowHardware:
-                SaveSettings(_settings with { IsHardwarePanelHidden = !_settings.IsHardwarePanelHidden });
-                EnsureSomePanelVisible();
-                ApplyPanels();
+                SelectMainTab(0);
                 break;
             case MenuCommand.ShowMonitor:
-                SaveSettings(_settings with { IsMonitorPanelHidden = !_settings.IsMonitorPanelHidden });
-                EnsureSomePanelVisible();
-                ApplyPanels();
+                SelectMainTab(1);
                 break;
             case MenuCommand.ShowTests:
-                SaveSettings(_settings with { IsTestPanelHidden = !_settings.IsTestPanelHidden });
-                EnsureSomePanelVisible();
-                ApplyPanels();
+                SelectMainTab(2);
                 break;
             case MenuCommand.AlwaysOnTop:
                 SaveSettings(_settings with { IsAlwaysOnTop = !_settings.IsAlwaysOnTop });
@@ -892,17 +951,33 @@ internal sealed class MainForm : Form
             return;
         }
 
-        var showsHardware = !_settings.IsHardwarePanelHidden;
-        var showsMonitor = !_settings.IsMonitorPanelHidden;
-        var showsTests = !_settings.IsTestPanelHidden;
-        hardware.Visible = showsHardware;
-        _monitorGroup!.Visible = showsMonitor;
-        _controlGroup!.Visible = showsTests;
-        _resultGroup!.Visible = showsTests;
-        _rightPanel.Visible = showsMonitor || showsTests;
-        _rightPanel.RowStyles[0].Height = (showsMonitor ? LogicalToDeviceUnits(MONITOR_SECTION_HEIGHT) : 0);
-        _rightPanel.RowStyles[2].SizeType = showsTests ? SizeType.Percent : SizeType.Absolute;
-        _rightPanel.RowStyles[2].Height = showsTests ? 100 : 0;
+        var tab = Math.Clamp(_settings.MainTabIndex, 0, 2);
+        hardware.Visible = tab == 0;
+        _rightPanel.Visible = tab != 0;
+        _monitorGroup!.Visible = tab == 1;
+        _controlGroup!.Visible = tab == 2;
+        _resultGroup!.Visible = tab == 2;
+        _rightPanel.RowStyles[0].Height = tab == 1 ? LogicalToDeviceUnits(MONITOR_SECTION_HEIGHT) : 0;
+        _rightPanel.RowStyles[1].Height = tab == 2
+            ? LogicalToDeviceUnits(_targetPanel.Visible ? CONTROL_SECTION_HEIGHT : CONTROL_SECTION_COMPACT_HEIGHT)
+            : 0;
+        _rightPanel.RowStyles[2].SizeType = tab == 2 ? SizeType.Percent : SizeType.Absolute;
+        _rightPanel.RowStyles[2].Height = tab == 2 ? 100 : 0;
+        _applyingTabs = true;
+        try
+        {
+            if (_hardwareTab is not null)
+            {
+                _hardwareTab.Checked = tab == 0;
+                _monitorTab!.Checked = tab == 1;
+                _testTab!.Checked = tab == 2;
+            }
+        }
+        finally
+        {
+            _applyingTabs = false;
+        }
+
         ApplyBodyWidths();
         UpdateCommandStates();
     }
@@ -956,14 +1031,6 @@ internal sealed class MainForm : Form
             FloatingSnapped = _floatingForm is { IsDisposed: false } ? floating.Snapped : _settings.FloatingSnapped,
             FloatingInfoVisible = _floatingForm is { IsDisposed: false } ? floating.InfoVisible : _settings.FloatingInfoVisible,
         });
-    }
-
-    private void EnsureSomePanelVisible()
-    {
-        if (_settings.IsHardwarePanelHidden && _settings.IsMonitorPanelHidden && _settings.IsTestPanelHidden)
-        {
-            SaveSettings(_settings with { IsHardwarePanelHidden = false });
-        }
     }
 
     /// <summary>
@@ -1429,7 +1496,9 @@ internal sealed class MainForm : Form
         // One card leaves nothing to choose, so the row appears only with two or more.
         var hasChoice = candidates.Count > 1;
         _targetPanel.Visible = hasChoice;
-        _rightPanel.RowStyles[1].Height = _settings.IsTestPanelHidden ? 0 : LogicalToDeviceUnits(hasChoice ? CONTROL_SECTION_HEIGHT : CONTROL_SECTION_COMPACT_HEIGHT);
+        _rightPanel.RowStyles[1].Height = _settings.MainTabIndex == 2
+            ? LogicalToDeviceUnits(hasChoice ? CONTROL_SECTION_HEIGHT : CONTROL_SECTION_COMPACT_HEIGHT)
+            : 0;
         for (var index = 0; index < candidates.Count; index++)
         {
             // Numbered because two identical cards would otherwise read the same.
@@ -1852,9 +1921,10 @@ internal sealed class MainForm : Form
             menu.SetEnabled(MenuCommand.Reload, isReady && !isRunning);
             menu.SetEnabled(MenuCommand.AdvancedInfo, isReady);
             menu.SetEnabled(MenuCommand.Maintenance, true);
-            menu.SetChecked(MenuCommand.ShowHardware, !_settings.IsHardwarePanelHidden);
-            menu.SetChecked(MenuCommand.ShowMonitor, !_settings.IsMonitorPanelHidden);
-            menu.SetChecked(MenuCommand.ShowTests, !_settings.IsTestPanelHidden);
+            var tab = Math.Clamp(_settings.MainTabIndex, 0, 2);
+            menu.SetChecked(MenuCommand.ShowHardware, tab == 0);
+            menu.SetChecked(MenuCommand.ShowMonitor, tab == 1);
+            menu.SetChecked(MenuCommand.ShowTests, tab == 2);
             menu.SetChecked(MenuCommand.AlwaysOnTop, _settings.IsAlwaysOnTop);
             menu.SetEnabled(MenuCommand.RestartToFirmware, !isRunning);
             for (var index = 0; index < LanguageChoices.Length; index++)
