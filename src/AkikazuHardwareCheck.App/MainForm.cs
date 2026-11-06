@@ -220,9 +220,28 @@ internal sealed class MainForm : Form
         // as the driver check in LoadHardwareAsync is done, before the slower WMI/disk enumeration.
         StartActivityMonitor();
         Refresh();
+        // Re-run the split layout after the show/DPI pass. Without this, a restored large window can keep zero-width
+        // content until the user resizes it.
+        BeginInvoke(new Action(() =>
+        {
+            if (!IsDisposed && !_isClosing)
+            {
+                ApplyBodyWidths();
+                PerformLayout();
+                Invalidate(invalidateChildren: true);
+            }
+        }));
         if (_settings.FloatingEnabled)
         {
-            ShowFloating(activate: false);
+            // Creating another top-level window inside OnShown can leave the main layout half-finished on the first
+            // paint. Let the main window finish its show/layout pass first.
+            BeginInvoke(new Action(() =>
+            {
+                if (!IsDisposed && !_isClosing && _settings.FloatingEnabled)
+                {
+                    ShowFloating(activate: false);
+                }
+            }));
         }
 
         _ = LoadHardwareAsync();
@@ -339,7 +358,12 @@ internal sealed class MainForm : Form
         _clockTimer.Dispose();
         _backgroundSource?.Dispose();
         StopLiveMonitor();
-        _floatingForm?.Dispose();
+        if (_floatingForm is { IsDisposed: false } floating)
+        {
+            floating.Hide();
+            floating.Dispose();
+        }
+
         _floatingForm = null;
         _crosshairForm?.Dispose();
         _crosshairForm = null;
@@ -1488,7 +1512,12 @@ internal sealed class MainForm : Form
         _hardwareWindow?.Close();
         _hardwareWindow = null;
         var showFloating = _floatingForm is { IsDisposed: false, Visible: true } || _settings.FloatingEnabled;
-        _floatingForm?.Dispose();
+        if (_floatingForm is { IsDisposed: false } floating)
+        {
+            floating.Hide();
+            floating.Dispose();
+        }
+
         _floatingForm = null;
 
         Font = Ui.FontFor(_t.Language);
@@ -1680,6 +1709,11 @@ internal sealed class MainForm : Form
 
     private void ShowFloating(bool activate = true)
     {
+        if (IsDisposed || _isClosing)
+        {
+            return;
+        }
+
         if (_floatingForm is { IsDisposed: false })
         {
             _floatingForm.Show();
