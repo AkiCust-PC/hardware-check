@@ -1642,7 +1642,8 @@ internal sealed class MainForm : Form
             CurrentLiveSnapshot,
             Font,
             _settings.HudFontSize,
-            Color.FromArgb(_settings.HudColorArgb));
+            Color.FromArgb(_settings.HudColorArgb),
+            _settings.HudItems);
         _hudForm.FormClosed += (_, _) => _hudForm = null;
         _hudForm.Show();
     }

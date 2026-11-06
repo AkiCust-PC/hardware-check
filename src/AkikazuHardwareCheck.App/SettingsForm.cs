@@ -29,6 +29,7 @@ internal sealed class SettingsForm : Form
     private readonly CheckBox _alwaysOnTop = Option();
     private readonly CheckBox _crosshairEnabled = Option();
     private readonly NumericUpDown _hudFont = new() { Minimum = 8, Maximum = 32, Margin = new Padding(0, 0, 0, Ui.SPACING) };
+    private readonly CheckedListBox _hudItems = new() { CheckOnClick = true, IntegralHeight = false, Height = 100, Margin = new Padding(0) };
     private Color _hudColor;
     private readonly Translator _t;
     private CrosshairSettings _crosshair;
@@ -62,6 +63,12 @@ internal sealed class SettingsForm : Form
         _crosshairEnabled.Checked = settings.CrosshairEnabled;
         _hudFont.Value = Math.Clamp(settings.HudFontSize, 8, 32);
         _hudColor = Color.FromArgb(settings.HudColorArgb);
+        _hudItems.Height = LogicalToDeviceUnits(100);
+        var hudLabels = new[] { t["hud.cpuLoad"], t["hud.cpuTemp"], t["hud.gpuLoad"], t["hud.gpuTemp"], t["hud.memory"] };
+        for (var index = 0; index < hudLabels.Length; index++)
+        {
+            _hudItems.Items.Add(hudLabels[index], (settings.HudItems & (1 << index)) != 0);
+        }
 
         var tabs = new TabControl
         {
@@ -116,6 +123,7 @@ internal sealed class SettingsForm : Form
         CrosshairOpacity = _crosshair.Opacity,
         HudFontSize = (int)_hudFont.Value,
         HudColorArgb = _hudColor.ToArgb(),
+        HudItems = Enumerable.Range(0, _hudItems.Items.Count).Aggregate(0, (value, index) => _hudItems.GetItemChecked(index) ? value | (1 << index) : value),
     };
 
     private TabPage BuildGeneralPage(Translator t)
@@ -193,6 +201,7 @@ internal sealed class SettingsForm : Form
         var fields = Fields();
         AddField(fields, t["hud.fontSize"], _hudFont);
         AddField(fields, t["hud.color"], colorButton);
+        AddField(fields, t["hud.items"], _hudItems);
         page.Controls.Add(fields);
         return page;
     }

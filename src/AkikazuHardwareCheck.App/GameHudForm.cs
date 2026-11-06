@@ -11,15 +11,17 @@ internal sealed class GameHudForm : Form
     private readonly Func<LiveSnapshot> _readSnapshot;
     private readonly int _fontSize;
     private readonly Color _color;
+    private readonly int _items;
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 1000 };
     private LiveSnapshot? _sample;
 
-    public GameHudForm(Translator t, Func<LiveSnapshot> readSnapshot, Font font, int fontSize, Color color)
+    public GameHudForm(Translator t, Func<LiveSnapshot> readSnapshot, Font font, int fontSize, Color color, int items)
     {
         _t = t;
         _readSnapshot = readSnapshot;
         _fontSize = Math.Clamp(fontSize, 8, 32);
         _color = color;
+        _items = items;
         Font = font;
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.Manual;
@@ -66,11 +68,11 @@ internal sealed class GameHudForm : Form
         }
 
         var parts = new List<string>();
-        Add(parts, "CPU", sample.CpuLoad, "%");
-        Add(parts, string.Empty, sample.CpuTemperature, "°C");
-        Add(parts, "GPU", sample.GpuLoad, "%");
-        Add(parts, string.Empty, sample.GpuTemperature, "°C");
-        Add(parts, "MEM", sample.MemoryLoad, "%");
+        if ((_items & 1) != 0) Add(parts, "CPU", sample.CpuLoad, "%");
+        if ((_items & 2) != 0) Add(parts, string.Empty, sample.CpuTemperature, "°C");
+        if ((_items & 4) != 0) Add(parts, "GPU", sample.GpuLoad, "%");
+        if ((_items & 8) != 0) Add(parts, string.Empty, sample.GpuTemperature, "°C");
+        if ((_items & 16) != 0) Add(parts, "MEM", sample.MemoryLoad, "%");
         var text = string.Join("   ", parts);
         if (text.Length == 0)
         {
