@@ -38,12 +38,39 @@ public static class SystemInfoCollector
             .FirstOrDefault();
         var bios = Wmi.Query(
             Wmi.CIM_SCOPE,
-            "SELECT SMBIOSBIOSVersion, ReleaseDate FROM Win32_BIOS",
-            item => (Version: Wmi.Text(item, "SMBIOSBIOSVersion"), Date: FormatWmiDate(Wmi.Text(item, "ReleaseDate"))))
+            "SELECT Manufacturer, SMBIOSBIOSVersion, ReleaseDate, SMBIOSMajorVersion, SMBIOSMinorVersion FROM Win32_BIOS",
+            item => (
+                Vendor: Wmi.Text(item, "Manufacturer"),
+                Version: Wmi.Text(item, "SMBIOSBIOSVersion"),
+                Date: FormatWmiDate(Wmi.Text(item, "ReleaseDate")),
+                Major: Wmi.Integer(item, "SMBIOSMajorVersion"),
+                Minor: Wmi.Integer(item, "SMBIOSMinorVersion")))
             .FirstOrDefault();
 
-        return new MotherboardInfo(board.Manufacturer, board.Model, bios.Version, bios.Date);
+        var smbios = bios.Major is { } major && bios.Minor is { } minor ? $"{major}.{minor}" : null;
+        return new MotherboardInfo(board.Manufacturer, board.Model, bios.Version, bios.Date, bios.Vendor, smbios, ReadFirmwareType());
     }
+
+    private static string? MapFirmwareType(FirmwareType type) => type switch
+    {
+        FirmwareType.Bios => "BIOS",
+        FirmwareType.Uefi => "UEFI",
+        _ => null,
+    };
+
+    private static string? ReadFirmwareType() =>
+        GetFirmwareType(out var type) ? MapFirmwareType(type) : null;
+
+    private enum FirmwareType
+    {
+        Unknown = 0,
+        Bios = 1,
+        Uefi = 2,
+        Max = 3,
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern bool GetFirmwareType(out FirmwareType type);
 
     public static MemoryInfo ReadMemory()
     {

@@ -126,7 +126,14 @@ public sealed record GpuInfo(
     public bool IsSoftwareAdapter => Kind == GpuKind.Software;
 }
 
-public sealed record MotherboardInfo(string? Manufacturer, string? Model, string? BiosVersion, string? BiosDate);
+public sealed record MotherboardInfo(
+    string? Manufacturer,
+    string? Model,
+    string? BiosVersion,
+    string? BiosDate,
+    string? BiosVendor = null,
+    string? SmbiosVersion = null,
+    string? FirmwareType = null);
 
 public sealed record MemoryInfo(ulong? SystemVisibleBytes, ulong? InstalledBytes, IReadOnlyList<MemoryModule> Modules);
 
@@ -162,7 +169,11 @@ public sealed record DisplayInfo(
     double? DiagonalInches,
     string? Connection,
     bool IsPrimary,
-    string? ConnectedGpu);
+    string? ConnectedGpu,
+    bool? HdrSupported = null,
+    bool? HdrEnabled = null,
+    int? BitsPerColor = null,
+    string? ColorEncoding = null);
 
 public enum SensorStatus
 {

@@ -13,10 +13,10 @@ public class AdvancedInfoTests
         Environment: new ProbeEnvironment(new OperatingSystemInfo("Windows 11 Pro", "26H2", "26300.1", "X64", "2026-05-12"), WindowsActivation.Activated, true, true),
         Cpus: [new CpuInfo("Intel", "Intel(R) Core(TM) Ultra 5 225", 10, 10, 3300, "LGA1851", 22 * 1024, 20 * 1024, "Intel64 Family 6 Model 198 Stepping 2", false)],
         Gpus: [new GpuInfo("Intel", "Intel(R) Arc(TM) Pro B60 Graphics", 24UL << 30, "32.0.101.8737", GpuKind.Discrete, "0:1", "Intel Corporation", "2026-04-29")],
-        Motherboard: new MotherboardInfo("ASUSTeK COMPUTER INC.", "ROG STRIX B860-G GAMING WIFI", "1801", "2025-09-12"),
+        Motherboard: new MotherboardInfo("ASUSTeK COMPUTER INC.", "ROG STRIX B860-G GAMING WIFI", "1801", "2025-09-12", "American Megatrends", "3.6", "UEFI"),
         Memory: new MemoryInfo(48UL << 30, 48UL << 30, [new MemoryModule("A1", 24UL << 30, "DDR5", "G Skill Intl", "F5-8400J4052G24G", 8400, 8400, 1400)]),
         Disks: [new DiskInfo("0", "CT2000T700SSD3", 2_000_398_934_016, "SSD", "NVMe", "Healthy", true, 5, 4)],
-        Displays: [new DisplayInfo("LG Ultra HD", "GSM", "5B7F", 2020, 3840, 2160, 60, 27.2, "DisplayPort", true, "Arc Pro B60")],
+        Displays: [new DisplayInfo("LG Ultra HD", "GSM", "5B7F", 2020, 3840, 2160, 60, 27.2, "DisplayPort", true, "Arc Pro B60", HdrSupported: true, HdrEnabled: true, BitsPerColor: 10, ColorEncoding: "HDR10")],
         Diagnostics: [],
         Network: new NetworkConnection(NetworkKind.WiFi, "MediaTek Wi-Fi 7 MT7925", 2882, 89),
         SystemDrive: new SystemDriveSpace(600_000_000_000, 2_000_000_000_000),
@@ -85,12 +85,14 @@ public class AdvancedInfoTests
     }
 
     [Fact]
-    public void MissingAdvancedDataIsExplicitlyMarked()
+    public void CpuIdAndDisplayHdrArePopulated()
     {
         var snapshot = AdvancedInfoBuilder.Build(Translator.Load(AppLanguage.SIMPLIFIED_CHINESE), Hardware(), Sensors(), Now);
 
-        Assert.Contains(snapshot.AllFields(), field => field.Key == "cpu.cpuid" && field.State == InfoState.NotImplemented);
-        Assert.Contains(snapshot.AllFields(), field => field.Key == "display.0.hdr" && field.State == InfoState.NotImplemented);
+        Assert.Contains(snapshot.AllFields(), field => field.Key == "cpu.cpuid.vendor" && field.State == InfoState.Available);
+        Assert.Contains(snapshot.AllFields(), field => field.Key == "display.0.hdrSupported" && field.Value == "有");
+        Assert.Contains(snapshot.AllFields(), field => field.Key == "display.0.bitsPerColor" && field.Value == "10");
+        Assert.Contains(snapshot.AllFields(), field => field.Key == "storage.volume.0.root");
     }
 
     [Fact]
