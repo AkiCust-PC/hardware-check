@@ -15,7 +15,7 @@ namespace AkikazuHardwareCheck.App;
 internal sealed class FloatingPerformanceForm : Form
 {
     private const int BALL_SIZE = 96;
-    private const int STRIP_WIDTH = 26;
+    private const int STRIP_WIDTH = 13;
     private const int STRIP_HEIGHT = 150;
     private const int SNAP_DISTANCE = 28;
     private const int DRAG_THRESHOLD = 4;
@@ -339,12 +339,37 @@ internal sealed class FloatingPerformanceForm : Form
         points.Add(new PointF(bounds.Right, bounds.Bottom));
         wave.AddLines(points.ToArray());
         wave.CloseFigure();
+        var temperature = _sample?.CpuTemperature;
+        var heat = temperature is { } celsius ? Math.Clamp((celsius - 40d) / 45d, 0d, 1d) : 0.35d;
+        var coolTop = Color.FromArgb(210, 80, 170, 255);
+        var hotTop = Color.FromArgb(225, 235, 70, 55);
+        var coolBottom = Color.FromArgb(210, 32, 110, 210);
+        var hotBottom = Color.FromArgb(225, 160, 35, 30);
         var state = graphics.Save();
         graphics.SetClip(container);
-        using var liquid = new SolidBrush(Color.FromArgb(105, SystemColors.Highlight));
-        graphics.FillPath(liquid, wave);
-        using var shine = new Pen(Color.FromArgb(55, 255, 255, 255), 1f);
-        graphics.DrawLine(shine, bounds.Left + DpiScale(4), top, bounds.Right - DpiScale(4), top);
+        using (var liquid = new LinearGradientBrush(bounds, Blend(coolTop, hotTop, heat), Blend(coolBottom, hotBottom, heat), LinearGradientMode.Vertical))
+        {
+            graphics.FillPath(liquid, wave);
+        }
+
+        using (var shine = new Pen(Color.FromArgb(70, 255, 255, 255), 1f))
+        {
+            graphics.DrawLine(shine, bounds.Left + DpiScale(4), top, bounds.Right - DpiScale(4), top);
+        }
+
+        // More bubbles as the CPU gets hotter; the animation phase makes them drift upward.
+        graphics.SetClip(wave, CombineMode.Intersect);
+        var bubbleCount = 2 + (int)Math.Round(heat * 10);
+        for (var index = 0; index < bubbleCount; index++)
+        {
+            var cycle = ((_animationPhase * 0.07) + (index * 0.37)) % 1;
+            var bubbleX = bounds.Left + (int)(bounds.Width * (0.16 + (0.68 * ((index * 0.41) % 1))));
+            var bubbleY = bounds.Bottom - DpiScale(2) - (int)(cycle * Math.Max(1, bounds.Bottom - top - DpiScale(4)));
+            var radius = Math.Max(1, DpiScale(index % 3 == 0 ? 2 : 1));
+            using var bubble = new SolidBrush(Color.FromArgb(110, 255, 255, 255));
+            graphics.FillEllipse(bubble, bubbleX, bubbleY, radius, radius);
+        }
+
         graphics.Restore(state);
         wave.Dispose();
     }
@@ -361,6 +386,12 @@ internal sealed class FloatingPerformanceForm : Form
         using var inner = new Pen(Color.FromArgb(36, 255, 255, 255), 1f);
         graphics.DrawPath(inner, path);
     }
+
+    private static Color Blend(Color from, Color to, double amount) => Color.FromArgb(
+        (int)Math.Round(from.A + ((to.A - from.A) * amount)),
+        (int)Math.Round(from.R + ((to.R - from.R) * amount)),
+        (int)Math.Round(from.G + ((to.G - from.G) * amount)),
+        (int)Math.Round(from.B + ((to.B - from.B) * amount)));
 
     private static GraphicsPath RoundedRect(Rectangle bounds, int radius)
     {
@@ -446,9 +477,10 @@ internal sealed class FloatingPerformanceForm : Form
 
     private void SnapToNearestEdge(bool force = false)
     {
-        var screen = Screen.FromControl(this).WorkingArea;
-        var leftDistance = Math.Abs(Left - screen.Left);
-        var rightDistance = Math.Abs(screen.Right - Right);
+        // Use the physical cursor against the physical work area; the window's Left/Right are DPI-scaled.
+        var screen = Screen.FromPoint(Cursor.Position).WorkingArea;
+        var leftDistance = Math.Abs(Cursor.Position.X - screen.Left);
+        var rightDistance = Math.Abs(screen.Right - Cursor.Position.X);
         var nearEdge = Math.Min(leftDistance, rightDistance) <= DpiScale(SNAP_DISTANCE);
         _snapped = force || nearEdge;
         ApplyMode();
@@ -462,9 +494,19 @@ internal sealed class FloatingPerformanceForm : Form
 
     private void DockTo(bool left)
     {
-        var screen = Screen.FromControl(this).WorkingArea;
+        var screen = Screen.FromPoint(Cursor.Position).WorkingArea;
         _snapped = true;
         ApplyMode();
+        if (GetWindowRect(Handle, out var rect))
+        {
+            var width = Math.Max(1, rect.Right - rect.Left);
+            var height = Math.Max(1, rect.Bottom - rect.Top);
+            var x = left ? screen.Left : screen.Right - width;
+            var y = Math.Clamp(rect.Top, screen.Top, Math.Max(screen.Top, screen.Bottom - height));
+            SetWindowPos(Handle, IntPtr.Zero, x, y, 0, 0, 0x0001 | 0x0004 | 0x0010);
+            return;
+        }
+
         Left = left ? screen.Left : screen.Right - Width;
         Top = Math.Clamp(Top, screen.Top, Math.Max(screen.Top, screen.Bottom - Height));
     }
@@ -520,6 +562,9 @@ internal sealed class FloatingPerformanceForm : Form
 
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr window, out NativeRect rect);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr window, IntPtr after, int x, int y, int width, int height, uint flags);
 
     private void EnableLayered()
     {

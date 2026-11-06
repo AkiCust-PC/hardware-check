@@ -101,11 +101,10 @@ internal sealed class MainForm : Form
     private readonly System.Windows.Forms.Timer _clockTimer = new() { Interval = CLOCK_INTERVAL_MS };
     private TableLayoutPanel? _rootPanel;
     private TableLayoutPanel? _bodyPanel;
-    private RadioButton? _hardwareTab;
-    private RadioButton? _monitorTab;
-    private RadioButton? _testTab;
-    private bool _applyingTabs;
     private TableLayoutPanel? _monitorPanel;
+    private Control? _chartRow;
+    private Control? _cpuCard;
+    private Control? _gpuCard;
     private Control? _systemCard;
     private Control? _fanCard;
     private Label? _cpuCardTitle;
@@ -441,72 +440,12 @@ internal sealed class MainForm : Form
         body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         body.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        body.Controls.Add(_hardwareGroup, 0, 0);
-        body.Controls.Add(_rightPanel, 1, 0);
+        // Monitoring is the primary column; hardware configuration is secondary.
+        body.Controls.Add(_rightPanel, 0, 0);
+        body.Controls.Add(_hardwareGroup, 1, 0);
         body.Resize += (_, _) => ApplyBodyWidths();
         _bodyPanel = body;
-
-        var wrapper = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Margin = new Padding(0) };
-        wrapper.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        wrapper.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        wrapper.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        wrapper.Controls.Add(BuildTabBar(), 0, 0);
-        wrapper.Controls.Add(body, 0, 1);
-        return wrapper;
-    }
-
-    private Control BuildTabBar()
-    {
-        var bar = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 3,
-            RowCount = 1,
-            AutoSize = true,
-            Margin = new Padding(0, 0, 0, Ui.SPACING),
-        };
-        for (var index = 0; index < 3; index++)
-        {
-            bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100 / 3f));
-        }
-
-        _hardwareTab = BuildTabButton(_t["tab.hardware"], 0);
-        _monitorTab = BuildTabButton(_t["tab.monitor"], 1);
-        _testTab = BuildTabButton(_t["tab.tests"], 2);
-        bar.Controls.Add(_hardwareTab, 0, 0);
-        bar.Controls.Add(_monitorTab, 1, 0);
-        bar.Controls.Add(_testTab, 2, 0);
-        return bar;
-    }
-
-    private RadioButton BuildTabButton(string text, int index)
-    {
-        var button = new RadioButton
-        {
-            Text = text,
-            Appearance = Appearance.Button,
-            AutoSize = false,
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleCenter,
-            MinimumSize = new Size(0, Ui.BUTTON_MIN_HEIGHT),
-            Margin = new Padding(0, 0, index < 2 ? Ui.SPACING : 0, 0),
-            UseVisualStyleBackColor = true,
-        };
-        button.CheckedChanged += (_, _) =>
-        {
-            if (!_applyingTabs && button.Checked)
-            {
-                SelectMainTab(index);
-            }
-        };
-        return button;
-    }
-
-    private void SelectMainTab(int index)
-    {
-        index = Math.Clamp(index, 0, 2);
-        SaveSettings(_settings with { MainTabIndex = index });
-        ApplyPanels();
+        return body;
     }
 
     /// <summary>The hardware list fills the left side; the third information level stays at its bottom.</summary>
@@ -548,22 +487,23 @@ internal sealed class MainForm : Form
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
         panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        var cpuCard = BuildMetricCard("\uE950", _t["monitor.cpu"], out _cpuCardTitle,
+        _cpuCard = BuildMetricCard("\uE950", _t["monitor.cpu"], out _cpuCardTitle,
             [_cpuTemperatureTile, _cpuLoadTile, _cpuVoltageTile, _cpuClockTile]);
-        var gpuCard = BuildMetricCard("\uE7F4", _t["monitor.gpu"], out _gpuCardTitle,
+        _gpuCard = BuildMetricCard("\uE7F4", _t["monitor.gpu"], out _gpuCardTitle,
             [_gpuTemperatureTile, _gpuLoadTile, _gpuVoltageTile, _gpuClockTile]);
         _systemCard = BuildMetricCard("\uE7F1", _t["monitor.system"], out _systemCardTitle,
             [_memoryLoadTile, _diskLoadTile, _uploadTile, _downloadTile]);
         _fanCard = BuildMetricCard("", _t["monitor.fans"], out _fanCardTitle,
             [_cpuFanTile, _pumpTile, _gpuFanTile, _caseFanTile]);
 
-        panel.Controls.Add(cpuCard, 0, 0);
-        panel.Controls.Add(gpuCard, 1, 0);
+        panel.Controls.Add(_cpuCard, 0, 0);
+        panel.Controls.Add(_gpuCard, 1, 0);
         panel.Controls.Add(_systemCard, 0, 1);
         panel.Controls.Add(_fanCard, 1, 1);
 
         var chartRow = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false, Margin = new Padding(0, Ui.SPACING / 2, 0, 0) };
         chartRow.Controls.Add(_chartButton);
+        _chartRow = chartRow;
         panel.Controls.Add(chartRow, 0, 2);
         panel.SetColumnSpan(chartRow, 2);
 
@@ -791,9 +731,9 @@ internal sealed class MainForm : Form
         NativeMenu.AddItem(settings, MenuCommand.Settings, _t["ui.settings"]);
 
         var view = menu.AddSubmenu(_t["ui.menuView"]);
-        NativeMenu.AddItem(view, MenuCommand.ShowHardware, _t["tab.hardware"]);
-        NativeMenu.AddItem(view, MenuCommand.ShowMonitor, _t["tab.monitor"]);
-        NativeMenu.AddItem(view, MenuCommand.ShowTests, _t["tab.tests"]);
+        NativeMenu.AddItem(view, MenuCommand.ShowHardware, _t["ui.showHardware"]);
+        NativeMenu.AddItem(view, MenuCommand.ShowMonitor, _t["ui.showMonitor"]);
+        NativeMenu.AddItem(view, MenuCommand.ShowTests, _t["ui.showTests"]);
         NativeMenu.AddItem(view, MenuCommand.AlwaysOnTop, _t["ui.alwaysOnTop"]);
         NativeMenu.AddItem(view, MenuCommand.Floating, _t["tray.floating"]);
         NativeMenu.AddSeparator(view);
@@ -873,13 +813,19 @@ internal sealed class MainForm : Form
                 ExitApplication();
                 break;
             case MenuCommand.ShowHardware:
-                SelectMainTab(0);
+                SaveSettings(_settings with { IsHardwarePanelHidden = !_settings.IsHardwarePanelHidden });
+                EnsureSomePanelVisible();
+                ApplyPanels();
                 break;
             case MenuCommand.ShowMonitor:
-                SelectMainTab(1);
+                SaveSettings(_settings with { IsMonitorPanelHidden = !_settings.IsMonitorPanelHidden });
+                EnsureSomePanelVisible();
+                ApplyPanels();
                 break;
             case MenuCommand.ShowTests:
-                SelectMainTab(2);
+                SaveSettings(_settings with { IsTestPanelHidden = !_settings.IsTestPanelHidden });
+                EnsureSomePanelVisible();
+                ApplyPanels();
                 break;
             case MenuCommand.AlwaysOnTop:
                 SaveSettings(_settings with { IsAlwaysOnTop = !_settings.IsAlwaysOnTop });
@@ -946,35 +892,94 @@ internal sealed class MainForm : Form
             return;
         }
 
-        var tab = Math.Clamp(_settings.MainTabIndex, 0, 2);
-        hardware.Visible = tab == 0;
-        _rightPanel.Visible = tab != 0;
-        _monitorGroup!.Visible = tab == 1;
-        _controlGroup!.Visible = tab == 2;
-        _resultGroup!.Visible = tab == 2;
-        _rightPanel.RowStyles[0].Height = tab == 1 ? LogicalToDeviceUnits(MONITOR_SECTION_HEIGHT) : 0;
-        _rightPanel.RowStyles[1].Height = tab == 2
-            ? LogicalToDeviceUnits(_targetPanel.Visible ? CONTROL_SECTION_HEIGHT : CONTROL_SECTION_COMPACT_HEIGHT)
-            : 0;
-        _rightPanel.RowStyles[2].SizeType = tab == 2 ? SizeType.Percent : SizeType.Absolute;
-        _rightPanel.RowStyles[2].Height = tab == 2 ? 100 : 0;
-        _applyingTabs = true;
-        try
+        var showsHardware = !_settings.IsHardwarePanelHidden;
+        var showsMonitor = !_settings.IsMonitorPanelHidden;
+        var showsTests = !_settings.IsTestPanelHidden;
+        if (!showsHardware && !showsMonitor && !showsTests)
         {
-            if (_hardwareTab is not null)
-            {
-                _hardwareTab.Checked = tab == 0;
-                _monitorTab!.Checked = tab == 1;
-                _testTab!.Checked = tab == 2;
-            }
-        }
-        finally
-        {
-            _applyingTabs = false;
+            showsMonitor = true;
         }
 
+        hardware.Visible = showsHardware;
+        _rightPanel.Visible = showsMonitor || showsTests;
+        _monitorGroup!.Visible = showsMonitor;
+        _controlGroup!.Visible = showsTests;
+        _resultGroup!.Visible = showsTests;
+        var onlyMonitor = showsMonitor && !showsTests && !showsHardware;
+        _rightPanel.RowStyles[0].SizeType = onlyMonitor ? SizeType.Percent : SizeType.Absolute;
+        _rightPanel.RowStyles[0].Height = onlyMonitor
+            ? 100
+            : showsMonitor ? LogicalToDeviceUnits(MONITOR_SECTION_HEIGHT) : 0;
+        _rightPanel.RowStyles[1].Height = showsTests
+            ? LogicalToDeviceUnits(_targetPanel.Visible ? CONTROL_SECTION_HEIGHT : CONTROL_SECTION_COMPACT_HEIGHT)
+            : 0;
+        _rightPanel.RowStyles[2].SizeType = showsTests ? SizeType.Percent : SizeType.Absolute;
+        _rightPanel.RowStyles[2].Height = showsTests ? 100 : 0;
+        ApplyMonitorLayout(onlyMonitor);
         ApplyBodyWidths();
         UpdateCommandStates();
+    }
+
+    private void EnsureSomePanelVisible()
+    {
+        if (_settings.IsHardwarePanelHidden && _settings.IsMonitorPanelHidden && _settings.IsTestPanelHidden)
+        {
+            SaveSettings(_settings with { IsMonitorPanelHidden = false });
+        }
+    }
+
+    private void ApplyMonitorLayout(bool oneColumn)
+    {
+        if (_monitorPanel is not { } panel
+            || _cpuCard is null
+            || _gpuCard is null
+            || _systemCard is null
+            || _fanCard is null
+            || _chartRow is null)
+        {
+            return;
+        }
+
+        panel.SuspendLayout();
+        panel.Controls.Clear();
+        panel.ColumnStyles.Clear();
+        panel.RowStyles.Clear();
+        panel.ColumnCount = oneColumn ? 1 : 2;
+        for (var column = 0; column < panel.ColumnCount; column++)
+        {
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, oneColumn ? 100 : 50));
+        }
+
+        Control[] cards = [_cpuCard, _gpuCard, _systemCard, _fanCard];
+        var cardRows = oneColumn ? cards.Length : 2;
+        for (var row = 0; row < cardRows; row++)
+        {
+            if (oneColumn && cards[row] == _fanCard)
+            {
+                // The fan card is a compact footer, not a full-height monitoring card.
+                panel.RowStyles.Add(new RowStyle(SizeType.Absolute, _fanCard.Visible ? LogicalToDeviceUnits(150) : 0));
+            }
+            else
+            {
+                panel.RowStyles.Add(new RowStyle(SizeType.Percent, oneColumn ? 100f / 3 : 50f));
+            }
+        }
+
+        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        panel.RowCount = cardRows + 1;
+        for (var index = 0; index < cards.Length; index++)
+        {
+            panel.Controls.Add(cards[index], oneColumn ? 0 : index % 2, oneColumn ? index : index / 2);
+        }
+
+        panel.Controls.Add(_chartRow, 0, cardRows);
+        panel.SetColumnSpan(_chartRow, panel.ColumnCount);
+        if (!oneColumn)
+        {
+            panel.SetColumnSpan(_systemCard, _fanCard.Visible ? 1 : 2);
+        }
+
+        panel.ResumeLayout();
     }
 
     private void RestoreWindowState()
@@ -1029,8 +1034,8 @@ internal sealed class MainForm : Form
     }
 
     /// <summary>
-    /// An absolute split stops the long hardware values from making the left column wider than half. The info view
-    /// wraps its values instead, so both sides keep their text at the minimum window size.
+    /// Monitoring occupies the primary (left) column; hardware configuration is the secondary (right) column.
+    /// An absolute split keeps long hardware values from squeezing the monitoring column.
     /// </summary>
     private void ApplyBodyWidths()
     {
@@ -1040,16 +1045,17 @@ internal sealed class MainForm : Form
         }
 
         var width = Math.Max(0, body.ClientSize.Width);
-        var showsHardware = hardware.Visible;
-        var showsTests = _rightPanel.Visible;
-        var left = !showsHardware ? 0 : showsTests ? width / 2 : width;
+        var showsPrimary = _rightPanel.Visible;
+        var showsSecondary = hardware.Visible;
+        var primaryWidth = !showsPrimary ? 0 : showsSecondary ? width / 2 : width;
+        var secondaryWidth = Math.Max(0, width - primaryWidth);
         body.ColumnStyles[0].SizeType = SizeType.Absolute;
-        body.ColumnStyles[0].Width = left;
+        body.ColumnStyles[0].Width = primaryWidth;
         body.ColumnStyles[1].SizeType = SizeType.Absolute;
-        body.ColumnStyles[1].Width = Math.Max(0, width - left);
-        hardware.MaximumSize = new Size(left, 0);
-        _hardwareList.MaximumSize = new Size(Math.Max(1, left - (Ui.SPACING * 3)), 0);
-        _rightPanel.MaximumSize = new Size(Math.Max(0, width - left), 0);
+        body.ColumnStyles[1].Width = secondaryWidth;
+        hardware.MaximumSize = new Size(secondaryWidth, 0);
+        _hardwareList.MaximumSize = new Size(Math.Max(1, secondaryWidth - (Ui.SPACING * 3)), 0);
+        _rightPanel.MaximumSize = new Size(Math.Max(0, primaryWidth), 0);
     }
 
     private async Task ReloadHardwareAsync()
@@ -1491,9 +1497,9 @@ internal sealed class MainForm : Form
         // One card leaves nothing to choose, so the row appears only with two or more.
         var hasChoice = candidates.Count > 1;
         _targetPanel.Visible = hasChoice;
-        _rightPanel.RowStyles[1].Height = _settings.MainTabIndex == 2
-            ? LogicalToDeviceUnits(hasChoice ? CONTROL_SECTION_HEIGHT : CONTROL_SECTION_COMPACT_HEIGHT)
-            : 0;
+        _rightPanel.RowStyles[1].Height = _settings.IsTestPanelHidden
+            ? 0
+            : LogicalToDeviceUnits(hasChoice ? CONTROL_SECTION_HEIGHT : CONTROL_SECTION_COMPACT_HEIGHT);
         for (var index = 0; index < candidates.Count; index++)
         {
             // Numbered because two identical cards would otherwise read the same.
@@ -1690,12 +1696,16 @@ internal sealed class MainForm : Form
             _fanCard.Visible = shown.Count > 0;
         }
 
-        if (_systemCard is not null)
+        if (_systemCard is not null && panel.ColumnCount > 1)
         {
             panel.SetColumnSpan(_systemCard, shown.Count > 0 ? 1 : 2);
         }
 
         panel.ResumeLayout();
+        if (panel.ColumnCount == 1)
+        {
+            ApplyMonitorLayout(oneColumn: true);
+        }
     }
 
     private void ShowMetrics(double? cpuTemperature, double? cpuLoad, double? gpuTemperature, double? gpuLoad)
@@ -1916,10 +1926,9 @@ internal sealed class MainForm : Form
             menu.SetEnabled(MenuCommand.Reload, isReady && !isRunning);
             menu.SetEnabled(MenuCommand.AdvancedInfo, isReady);
             menu.SetEnabled(MenuCommand.Maintenance, true);
-            var tab = Math.Clamp(_settings.MainTabIndex, 0, 2);
-            menu.SetChecked(MenuCommand.ShowHardware, tab == 0);
-            menu.SetChecked(MenuCommand.ShowMonitor, tab == 1);
-            menu.SetChecked(MenuCommand.ShowTests, tab == 2);
+            menu.SetChecked(MenuCommand.ShowHardware, !_settings.IsHardwarePanelHidden);
+            menu.SetChecked(MenuCommand.ShowMonitor, !_settings.IsMonitorPanelHidden);
+            menu.SetChecked(MenuCommand.ShowTests, !_settings.IsTestPanelHidden);
             menu.SetChecked(MenuCommand.AlwaysOnTop, _settings.IsAlwaysOnTop);
             menu.SetEnabled(MenuCommand.RestartToFirmware, !isRunning);
             for (var index = 0; index < LanguageChoices.Length; index++)

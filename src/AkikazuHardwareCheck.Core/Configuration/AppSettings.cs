@@ -59,7 +59,9 @@ public sealed record AppSettings(
     int? FloatingTop = null,
     bool FloatingSnapped = false,
     bool FloatingInfoVisible = true,
-    int MainTabIndex = 0)
+    bool IsHardwarePanelHidden = false,
+    bool IsMonitorPanelHidden = false,
+    bool IsTestPanelHidden = false)
 {
     private const string FOLDER_NAME = "AkikazuHardwareCheck";
 
