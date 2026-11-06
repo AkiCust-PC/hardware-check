@@ -20,7 +20,7 @@ internal sealed class AdvancedInfoForm : Form
     private readonly Func<AdvancedSnapshot> _rebuild;
     private readonly TreeView _tree = new() { Dock = DockStyle.Fill, HideSelection = false, FullRowSelect = true };
     private readonly SplitContainer _split = new() { Dock = DockStyle.Fill, Orientation = Orientation.Vertical, FixedPanel = FixedPanel.Panel1 };
-    private readonly DataGridView _grid = TableStyle.Create();
+    private readonly ListView _list = ListViewTable.Create();
     private readonly TextBox _search = new() { Width = 220, Margin = new Padding(0, 0, Ui.SPACING, 0) };
     private readonly TextBox _details = new() { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill, WordWrap = true };
     private readonly Label _status = Ui.Label();
@@ -42,19 +42,14 @@ internal sealed class AdvancedInfoForm : Form
         ClientSize = new Size(LogicalToDeviceUnits(960), LogicalToDeviceUnits(640));
         MinimumSize = new Size(LogicalToDeviceUnits(800), LogicalToDeviceUnits(520));
 
-        var categoryColumn = TableStyle.Column("category", t["advanced.category"], 12, LogicalToDeviceUnits(80));
-        var groupColumn = TableStyle.Column("group", t["advanced.group"], 16, LogicalToDeviceUnits(90));
-        _grid.Columns.Add(categoryColumn);
-        _grid.Columns.Add(groupColumn);
-        _grid.Columns.Add(TableStyle.Column("property", t["advanced.attribute"], 24, LogicalToDeviceUnits(120)));
-        _grid.Columns.Add(TableStyle.Column("value", t["advanced.value"], 28, LogicalToDeviceUnits(140)));
-        _grid.Columns.Add(TableStyle.Column("status", t["advanced.status"], 10, LogicalToDeviceUnits(70)));
-        _grid.Columns.Add(TableStyle.Column("source", t["advanced.source"], 10, LogicalToDeviceUnits(70)));
-        categoryColumn.Visible = false;
-        groupColumn.Visible = false;
-        TableStyle.EnableColumnMenu(_grid, t);
-        TableStyle.EnableCopy(_grid, t);
-        _grid.SelectionChanged += (_, _) => ShowField();
+        _list.Columns.Add(t["advanced.attribute"], LogicalToDeviceUnits(180));
+        _list.Columns.Add(t["advanced.value"], LogicalToDeviceUnits(320));
+        _list.Columns.Add(t["advanced.status"], LogicalToDeviceUnits(100));
+        _list.Columns.Add(t["advanced.source"], LogicalToDeviceUnits(140));
+        ListViewTable.EnableSort(_list);
+        ListViewTable.EnableColumnMenu(_list, t);
+        ListViewTable.EnableCopy(_list, t);
+        _list.SelectedIndexChanged += (_, _) => ShowField();
         _tree.AfterSelect += (_, _) => ShowNode();
         _search.TextChanged += (_, _) => PopulateTree();
 
@@ -81,7 +76,7 @@ internal sealed class AdvancedInfoForm : Form
         right.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         right.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(DETAILS_HEIGHT)));
-        right.Controls.Add(_grid, 0, 0);
+        right.Controls.Add(_list, 0, 0);
         right.Controls.Add(_details, 0, 1);
         _split.Panel2.Controls.Add(right);
 
@@ -138,7 +133,7 @@ internal sealed class AdvancedInfoForm : Form
         }
         else
         {
-            _grid.Rows.Clear();
+            _list.Items.Clear();
             _details.Text = _t["advanced.noSelection"];
         }
 
@@ -225,37 +220,40 @@ internal sealed class AdvancedInfoForm : Form
 
     private void ShowNode()
     {
-        _grid.SuspendLayout();
-        _grid.Rows.Clear();
+        _list.BeginUpdate();
+        _list.Items.Clear();
+        _list.Groups.Clear();
         if (_tree.SelectedNode?.Tag is InfoNode node)
         {
             foreach (var group in node.Groups)
             {
+                var listGroup = new ListViewGroup(group.Label);
+                _list.Groups.Add(listGroup);
                 foreach (var field in group.Fields)
                 {
                     var value = field.Value ?? StateText(field.State);
-                    var index = _grid.Rows.Add(node.Label, group.Label, field.Label, value, StateText(field.State), field.Provenance?.Source ?? "");
-                    var row = _grid.Rows[index];
-                    row.Tag = field;
+                    var item = new ListViewItem([field.Label, value, StateText(field.State), field.Provenance?.Source ?? ""]) { Tag = field, Group = listGroup };
                     if (field.State == InfoState.ReadFailed)
                     {
-                        row.DefaultCellStyle.ForeColor = Ui.AlertColor;
+                        item.ForeColor = Ui.AlertColor;
                     }
                     else if (!field.HasValue)
                     {
-                        row.DefaultCellStyle.ForeColor = Ui.MutedTextColor;
+                        item.ForeColor = Ui.MutedTextColor;
                     }
+
+                    _list.Items.Add(item);
                 }
             }
         }
 
-        _grid.ResumeLayout();
+        _list.EndUpdate();
         _details.Text = "";
     }
 
     private void ShowField()
     {
-        var field = _grid.CurrentRow?.Tag as InfoField;
+        var field = _list.SelectedItems.Count > 0 ? _list.SelectedItems[0].Tag as InfoField : null;
         if (field is null)
         {
             _details.Text = _t["advanced.noSelection"];
