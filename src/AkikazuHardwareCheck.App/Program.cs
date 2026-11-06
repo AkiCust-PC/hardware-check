@@ -42,7 +42,7 @@ internal static class Program
 
         // Lets standard controls and the title bar follow the Windows light or dark setting.
         Application.SetColorMode(SystemColorMode.System);
-        Application.Run(new MainForm());
+        Application.Run(new MainForm(args.Contains("--tray", StringComparer.OrdinalIgnoreCase)));
     }
 
     /// <summary>The driver can only stop once the main program has closed it, which is when that process ends.</summary>

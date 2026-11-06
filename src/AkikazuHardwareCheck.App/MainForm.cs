@@ -123,6 +123,7 @@ internal sealed class MainForm : Form
     private CancellationTokenSource? _testStop;
     private AdvancedInfoForm? _advancedForm;
     private LiveChartForm? _chartForm;
+    private FloatingPerformanceForm? _floatingForm;
     private ActivitySnapshot? _activitySnapshot;
     private TestRunResult? _lastRun;
     private MemoryTestResult? _memoryResult;
@@ -130,9 +131,14 @@ internal sealed class MainForm : Form
     private SavedReport? _lastReport;
     private string? _statusText;
     private bool _closeAfterTest;
+    private NotifyIcon? _trayIcon;
+    private bool _isExiting;
+    private bool _trayHintShown;
+    private readonly bool _startHidden;
 
-    public MainForm()
+    public MainForm(bool startHidden = false)
     {
+        _startHidden = startHidden;
         _t = Translator.Load(_settings.Language is { } saved && AppLanguage.Parse(saved) is { } language
             ? language
             : AppLanguage.FromCulture(CultureInfo.CurrentUICulture.Name));
@@ -153,6 +159,7 @@ internal sealed class MainForm : Form
         ApplyLanguage();
         ApplyPanels();
         TopMost = _settings.IsAlwaysOnTop;
+        UpdateTrayIcon();
     }
 
     private bool IsTestRunning => _testStop is not null;
@@ -160,6 +167,11 @@ internal sealed class MainForm : Form
     protected override void OnShown(EventArgs e)
     {
         base.OnShown(e);
+        if (_startHidden && _settings is { ShowTrayIcon: true, CloseToTray: true })
+        {
+            HideToTray(showHint: false);
+        }
+
         _ = LoadHardwareAsync();
     }
 
@@ -218,6 +230,13 @@ internal sealed class MainForm : Form
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
+        if (!_isExiting && !_closeAfterTest && _settings is { CloseToTray: true, ShowTrayIcon: true } && !IsTestRunning)
+        {
+            e.Cancel = true;
+            HideToTray(showHint: true);
+            return;
+        }
+
         if (IsTestRunning && !_closeAfterTest)
         {
             e.Cancel = true;
@@ -239,6 +258,8 @@ internal sealed class MainForm : Form
         _clockTimer.Dispose();
         _backgroundSource?.Dispose();
         StopLiveMonitor();
+        _floatingForm?.Dispose();
+        _floatingForm = null;
         _activityMonitor?.Dispose();
         _sensorSource?.Dispose();
         if (_isDriverOurs)
@@ -249,6 +270,82 @@ internal sealed class MainForm : Form
         }
 
         base.OnFormClosing(e);
+    }
+
+    protected override void OnFormClosed(FormClosedEventArgs e)
+    {
+        _trayIcon?.Dispose();
+        _trayIcon = null;
+        base.OnFormClosed(e);
+    }
+
+    private void HideToTray(bool showHint)
+    {
+        ShowInTaskbar = false;
+        Hide();
+        if (showHint && !_trayHintShown)
+        {
+            _trayHintShown = true;
+            _trayIcon?.ShowBalloonTip(3000, _t["ui.appName"], _t["tray.hint"], ToolTipIcon.Info);
+        }
+    }
+
+    private void RestoreFromTray()
+    {
+        ShowInTaskbar = true;
+        Show();
+        if (WindowState == FormWindowState.Minimized)
+        {
+            WindowState = FormWindowState.Normal;
+        }
+
+        Activate();
+        BringToFront();
+    }
+
+    private void ExitApplication()
+    {
+        _isExiting = true;
+        Close();
+    }
+
+    private void UpdateTrayIcon()
+    {
+        _trayIcon?.Dispose();
+        _trayIcon = null;
+        if (!_settings.ShowTrayIcon)
+        {
+            return;
+        }
+
+        var menu = new ContextMenuStrip();
+        menu.Items.Add(Item(_t["tray.open"], (_, _) => RestoreFromTray()));
+        menu.Items.Add(Item(_t["tray.floating"], (_, _) => ShowFloating()));
+        menu.Items.Add(Item(_t["tray.chart"], (_, _) => ShowLiveChart()));
+        menu.Items.Add(Item(_t["tray.diagnostic"], (_, _) => ShowMaintenance()));
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(Item(_t["tray.settings"], (_, _) => OpenSettingsForm()));
+        var showIcon = new ToolStripMenuItem(_t["ui.showTrayIcon"]) { Checked = _settings.ShowTrayIcon };
+        showIcon.Click += (_, _) => SaveSettings(_settings with { ShowTrayIcon = false });
+        menu.Items.Add(showIcon);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(Item(_t["tray.exit"], (_, _) => ExitApplication()));
+
+        _trayIcon = new NotifyIcon
+        {
+            Icon = Ui.AppIcon,
+            Text = _t["ui.appName"],
+            Visible = true,
+            ContextMenuStrip = menu,
+        };
+        _trayIcon.DoubleClick += (_, _) => RestoreFromTray();
+    }
+
+    private static ToolStripMenuItem Item(string text, EventHandler onClick)
+    {
+        var item = new ToolStripMenuItem(text);
+        item.Click += onClick;
+        return item;
     }
 
     private static string? Number(double? value) => value?.ToString("0.#", CultureInfo.InvariantCulture);
@@ -587,6 +684,7 @@ internal sealed class MainForm : Form
         NativeMenu.AddItem(view, MenuCommand.ShowHardware, _t["ui.showHardware"]);
         NativeMenu.AddItem(view, MenuCommand.ShowTests, _t["ui.showTests"]);
         NativeMenu.AddItem(view, MenuCommand.AlwaysOnTop, _t["ui.alwaysOnTop"]);
+        NativeMenu.AddItem(view, MenuCommand.Floating, _t["tray.floating"]);
         NativeMenu.AddSeparator(view);
         NativeMenu.AddItem(view, MenuCommand.BackgroundColor, _t["ui.backgroundColor"]);
         NativeMenu.AddItem(view, MenuCommand.BackgroundImage, _t["ui.backgroundImage"]);
@@ -657,8 +755,11 @@ internal sealed class MainForm : Form
             case MenuCommand.Maintenance:
                 ShowMaintenance();
                 break;
+            case MenuCommand.Floating:
+                ShowFloating();
+                break;
             case MenuCommand.Exit:
-                Close();
+                ExitApplication();
                 break;
             case MenuCommand.ShowHardware:
                 // One side always stays, so the window is never left empty.
@@ -888,7 +989,26 @@ internal sealed class MainForm : Form
 
     private void SaveSettings(AppSettings settings)
     {
+        if (!settings.ShowTrayIcon && !Visible)
+        {
+            RestoreFromTray();
+        }
+
+        if (settings.StartWithWindows != _settings.StartWithWindows)
+        {
+            try
+            {
+                StartupRegistration.Set(settings.StartWithWindows);
+            }
+            catch (Exception exception) when (exception is UnauthorizedAccessException or IOException or System.Security.SecurityException)
+            {
+                SetStatus(_t["ui.settingsSaveFailed", exception.Message], isAlert: true);
+            }
+        }
+
         _settings = settings;
+        TopMost = settings.IsAlwaysOnTop;
+        UpdateTrayIcon();
         if (settings.TrySave(AppSettings.DefaultSettingsPath) is { } failure)
         {
             SetStatus(_t["ui.settingsSaveFailed", failure], isAlert: true);
@@ -903,9 +1023,12 @@ internal sealed class MainForm : Form
         _advancedForm = null;
         _chartForm?.Close();
         _chartForm = null;
+        _floatingForm?.Dispose();
+        _floatingForm = null;
 
         Font = Ui.FontFor(_t.Language);
         BuildMenu();
+        UpdateTrayIcon();
         ApplyEmphasis();
         Text = $"{_t["ui.appName"]} v{CheckReport.CurrentToolVersion}";
         _copyrightLink.Text = _t["ui.copyright", DateTime.Today.Year];
@@ -1054,6 +1177,22 @@ internal sealed class MainForm : Form
         form.FormClosed += (_, _) => _advancedForm = null;
         _advancedForm = form;
         form.Show(this);
+    }
+
+    private void ShowFloating()
+    {
+        if (_floatingForm is { IsDisposed: false })
+        {
+            _floatingForm.Show();
+            _floatingForm.Activate();
+            return;
+        }
+
+        var form = new FloatingPerformanceForm(_t, CurrentLiveSnapshot, Font);
+        form.FormClosed += (_, _) => _floatingForm = null;
+        _floatingForm = form;
+        form.Show();
+        form.Activate();
     }
 
     private void ShowLiveChart()
@@ -1786,6 +1925,7 @@ internal sealed class MainForm : Form
         try
         {
             Process.Start(new ProcessStartInfo(path) { UseShellExecute = true, Verb = "runas" })?.Dispose();
+            _isExiting = true;
             Close();
         }
         catch (Win32Exception exception)

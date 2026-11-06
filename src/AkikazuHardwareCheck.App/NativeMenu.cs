@@ -21,6 +21,7 @@ internal enum MenuCommand
     ShowHardware,
     ShowTests,
     AlwaysOnTop,
+    Floating,
     Guide,
     Updates,
     About,

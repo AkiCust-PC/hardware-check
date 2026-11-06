@@ -21,6 +21,9 @@ internal sealed class SettingsForm : Form
     private readonly NumericUpDown _cpuSeconds = Number(MIN_STRESS_SECONDS, MAX_STRESS_SECONDS);
     private readonly NumericUpDown _cpuLimit = Number(MIN_LIMIT_CELSIUS, MAX_LIMIT_CELSIUS);
     private readonly NumericUpDown _gpuLimit = Number(MIN_LIMIT_CELSIUS, MAX_LIMIT_CELSIUS);
+    private readonly CheckBox _showTrayIcon = Option();
+    private readonly CheckBox _closeToTray = Option();
+    private readonly CheckBox _startWithWindows = Option();
 
     public SettingsForm(Translator t, AppSettings settings, Font font)
     {
@@ -42,6 +45,9 @@ internal sealed class SettingsForm : Form
         _cpuSeconds.Value = (decimal)profile.CpuStressSeconds;
         _cpuLimit.Value = (decimal)Math.Clamp(profile.CpuProtectionCelsius, MIN_LIMIT_CELSIUS, MAX_LIMIT_CELSIUS);
         _gpuLimit.Value = (decimal)Math.Clamp(profile.GpuProtectionCelsius, MIN_LIMIT_CELSIUS, MAX_LIMIT_CELSIUS);
+        _showTrayIcon.Checked = settings.ShowTrayIcon;
+        _closeToTray.Checked = settings.CloseToTray;
+        _startWithWindows.Checked = settings.StartWithWindows || StartupRegistration.IsEnabled();
 
         var browseButton = Ui.Button();
         browseButton.Text = t["ui.browse"];
@@ -58,6 +64,9 @@ internal sealed class SettingsForm : Form
         AddField(fields, t["ui.cpuSeconds"], _cpuSeconds);
         AddField(fields, t["ui.cpuLimit"], _cpuLimit);
         AddField(fields, t["ui.gpuLimit"], _gpuLimit);
+        AddField(fields, t["ui.showTrayIcon"], _showTrayIcon);
+        AddField(fields, t["ui.closeToTray"], _closeToTray);
+        AddField(fields, t["ui.startWithWindows"], _startWithWindows);
 
         var okButton = Ui.Button();
         okButton.Text = t["ui.ok"];
@@ -87,12 +96,21 @@ internal sealed class SettingsForm : Form
         CpuStressSeconds = (double)_cpuSeconds.Value,
         CpuProtectionCelsius = (double)_cpuLimit.Value,
         GpuProtectionCelsius = (double)_gpuLimit.Value,
+        ShowTrayIcon = _showTrayIcon.Checked,
+        CloseToTray = _closeToTray.Checked,
+        StartWithWindows = _startWithWindows.Checked,
     };
 
     private static NumericUpDown Number(int minimum, int maximum) => new()
     {
         Minimum = minimum,
         Maximum = maximum,
+        Margin = new Padding(0, 0, 0, Ui.SPACING),
+    };
+
+    private static CheckBox Option() => new()
+    {
+        AutoSize = true,
         Margin = new Padding(0, 0, 0, Ui.SPACING),
     };
 

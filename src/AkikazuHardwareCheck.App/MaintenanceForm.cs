@@ -9,10 +9,14 @@ namespace AkikazuHardwareCheck.App;
 internal sealed class MaintenanceForm : Form
 {
     private readonly Translator _t;
-    private readonly ListView _startup = new() { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = true };
-    private readonly ListView _software = new() { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = true };
-    private readonly ListView _processes = new() { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = true };
-    private readonly ListView _events = new() { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = true };
+    private readonly DataGridView _startup = TableStyle.Create();
+    private readonly DataGridView _software = TableStyle.Create();
+    private readonly DataGridView _processes = TableStyle.Create();
+    private readonly DataGridView _events = TableStyle.Create();
+    private readonly CheckedListBox _cleanup = new() { Dock = DockStyle.Fill, CheckOnClick = true, IntegralHeight = false };
+    private readonly Button _scanCleanup = Ui.Button();
+    private readonly Button _cleanCleanup = Ui.Button();
+    private readonly List<JunkEntry> _junkEntries = [];
     private readonly Label _status = Ui.Label();
 
     public MaintenanceForm(Translator t, Font font)
@@ -30,6 +34,7 @@ internal sealed class MaintenanceForm : Form
         tabs.TabPages.Add(BuildSoftwarePage());
         tabs.TabPages.Add(BuildProcessPage());
         tabs.TabPages.Add(BuildEventPage());
+        tabs.TabPages.Add(BuildCleanupPage());
         tabs.TabPages.Add(BuildToolsPage());
 
         var refresh = Ui.Button();
@@ -54,38 +59,24 @@ internal sealed class MaintenanceForm : Form
         AcceptButton = close;
         CancelButton = close;
 
-        _startup.Columns.Add(t["maintenance.name"]);
-        _startup.Columns.Add(t["maintenance.command"]);
-        _startup.Columns.Add(t["maintenance.source"]);
-        _software.Columns.Add(t["maintenance.name"]);
-        _software.Columns.Add(t["maintenance.version"]);
-        _software.Columns.Add(t["maintenance.publisher"]);
-        _software.Columns.Add(t["maintenance.installDate"]);
-        _processes.Columns.Add(t["maintenance.name"]);
-        _processes.Columns.Add(t["maintenance.pid"]);
-        _processes.Columns.Add(t["maintenance.memory"]);
-        _processes.Columns.Add(t["maintenance.publisher"]);
-        _events.Columns.Add(t["maintenance.eventName"]);
-        _events.Columns.Add(t["maintenance.eventCount"]);
+        _startup.Columns.Add(TableStyle.Column("name", t["maintenance.name"], 22, LogicalToDeviceUnits(160)));
+        _startup.Columns.Add(TableStyle.Column("command", t["maintenance.command"], 58, LogicalToDeviceUnits(260)));
+        _startup.Columns.Add(TableStyle.Column("source", t["maintenance.source"], 20, LogicalToDeviceUnits(120)));
+        _software.Columns.Add(TableStyle.Column("name", t["maintenance.name"], 40, LogicalToDeviceUnits(220)));
+        _software.Columns.Add(TableStyle.Column("version", t["maintenance.version"], 16, LogicalToDeviceUnits(100)));
+        _software.Columns.Add(TableStyle.Column("publisher", t["maintenance.publisher"], 28, LogicalToDeviceUnits(140)));
+        _software.Columns.Add(TableStyle.Column("installDate", t["maintenance.installDate"], 16, LogicalToDeviceUnits(110)));
+        _processes.Columns.Add(TableStyle.Column("name", t["maintenance.name"], 32, LogicalToDeviceUnits(200)));
+        _processes.Columns.Add(TableStyle.Column("pid", t["maintenance.pid"], 14, LogicalToDeviceUnits(80)));
+        _processes.Columns.Add(TableStyle.Column("memory", t["maintenance.memory"], 22, LogicalToDeviceUnits(120)));
+        _processes.Columns.Add(TableStyle.Column("publisher", t["maintenance.publisher"], 32, LogicalToDeviceUnits(140)));
+        _events.Columns.Add(TableStyle.Column("eventName", t["maintenance.eventName"], 72, LogicalToDeviceUnits(240)));
+        _events.Columns.Add(TableStyle.Column("eventCount", t["maintenance.eventCount"], 28, LogicalToDeviceUnits(100)));
 
-        foreach (var column in _startup.Columns.Cast<ColumnHeader>())
+        foreach (var grid in new[] { _startup, _software, _processes, _events })
         {
-            column.Width = LogicalToDeviceUnits(column.Index == 1 ? 420 : 180);
-        }
-
-        foreach (var column in _software.Columns.Cast<ColumnHeader>())
-        {
-            column.Width = LogicalToDeviceUnits(column.Index == 0 ? 360 : 140);
-        }
-
-        foreach (var column in _processes.Columns.Cast<ColumnHeader>())
-        {
-            column.Width = LogicalToDeviceUnits(column.Index == 0 ? 260 : 140);
-        }
-
-        foreach (var column in _events.Columns.Cast<ColumnHeader>())
-        {
-            column.Width = LogicalToDeviceUnits(column.Index == 0 ? 260 : 140);
+            TableStyle.EnableColumnMenu(grid, t);
+            TableStyle.EnableCopy(grid, t);
         }
 
         Shown += async (_, _) => await LoadAsync();
@@ -153,6 +144,81 @@ internal sealed class MaintenanceForm : Form
         return page;
     }
 
+    private TabPage BuildCleanupPage()
+    {
+        var page = new TabPage(_t["maintenance.cleanup"]) { Padding = new Padding(Ui.SPACING), UseVisualStyleBackColor = true };
+        var hint = new Label { AutoSize = true, Text = _t["maintenance.cleanupHint"], MaximumSize = new Size(LogicalToDeviceUnits(840), 0), Margin = new Padding(0, 0, 0, Ui.SPACING) };
+        _scanCleanup.Text = _t["maintenance.scan"];
+        _scanCleanup.Click += async (_, _) => await ScanCleanupAsync();
+        _cleanCleanup.Text = _t["maintenance.clean"];
+        _cleanCleanup.Enabled = false;
+        _cleanCleanup.Click += async (_, _) => await CleanCleanupAsync();
+        var buttons = Ui.Flow();
+        buttons.Controls.AddRange([_scanCleanup, _cleanCleanup]);
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Margin = new Padding(0) };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.Controls.Add(hint, 0, 0);
+        layout.Controls.Add(_cleanup, 0, 1);
+        layout.Controls.Add(buttons, 0, 2);
+        page.Controls.Add(layout);
+        return page;
+    }
+
+    private async Task ScanCleanupAsync()
+    {
+        _cleanCleanup.Enabled = false;
+        _status.Text = _t["maintenance.scanning"];
+        var scan = await Task.Run(JunkCleaner.Scan);
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        _junkEntries.Clear();
+        _cleanup.Items.Clear();
+        foreach (var entry in scan.Entries)
+        {
+            _junkEntries.Add(entry);
+            _cleanup.Items.Add($"{_t["junk." + entry.Category]} - {MaintenanceCollectors.FormatBytes(entry.Bytes)} ({entry.Files})", false);
+        }
+
+        _cleanCleanup.Enabled = _junkEntries.Count > 0;
+        _status.Text = scan.IsAdministrator ? _t["maintenance.cleanupScanned"] : _t["maintenance.cleanupAdminHint"];
+    }
+
+    private async Task CleanCleanupAsync()
+    {
+        var selected = _cleanup.CheckedIndices.Cast<int>().ToList();
+        if (selected.Count == 0)
+        {
+            _status.Text = _t["maintenance.nothingSelected"];
+            return;
+        }
+
+        if (MessageBox.Show(this, _t["maintenance.cleanConfirm"], _t["maintenance.clean"], MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+        {
+            return;
+        }
+
+        var deleted = 0;
+        var bytes = 0L;
+        var skipped = 0;
+        foreach (var index in selected)
+        {
+            var result = await Task.Run(() => JunkCleaner.Clean(_junkEntries[index].Category));
+            deleted += result.DeletedFiles;
+            bytes += result.DeletedBytes;
+            skipped += result.SkippedFiles;
+        }
+
+        _status.Text = _t["maintenance.cleaned", deleted, MaintenanceCollectors.FormatBytes(bytes), skipped];
+        await ScanCleanupAsync();
+    }
+
     private TabPage BuildToolsPage()
     {
         var page = new TabPage(_t["maintenance.systemTools"]) { Padding = new Padding(Ui.SPACING), UseVisualStyleBackColor = true };
@@ -177,10 +243,10 @@ internal sealed class MaintenanceForm : Form
     private async Task LoadAsync()
     {
         _status.Text = _t["maintenance.running"];
-        _startup.Items.Clear();
-        _software.Items.Clear();
-        _processes.Items.Clear();
-        _events.Items.Clear();
+        _startup.Rows.Clear();
+        _software.Rows.Clear();
+        _processes.Rows.Clear();
+        _events.Rows.Clear();
 
         List<StartupEntry> startup;
         List<InstalledProgram> software;
@@ -210,31 +276,31 @@ internal sealed class MaintenanceForm : Form
 
         foreach (var item in startup)
         {
-            _startup.Items.Add(new ListViewItem([item.Name, item.Command, item.Source]));
+            _startup.Rows.Add(item.Name, item.Command, item.Source);
         }
 
         foreach (var item in software)
         {
-            var row = new ListViewItem([item.Name, item.Version ?? "", item.Publisher ?? "", MaintenanceCollectors.FormatInstallDate(item.InstallDate)]) { Tag = item };
-            _software.Items.Add(row);
+            var index = _software.Rows.Add(item.Name, item.Version ?? "", item.Publisher ?? "", MaintenanceCollectors.FormatInstallDate(item.InstallDate));
+            _software.Rows[index].Tag = item;
         }
 
         foreach (var item in processes)
         {
-            _processes.Items.Add(new ListViewItem([item.Name, item.Id.ToString(CultureInfo.InvariantCulture), MaintenanceCollectors.FormatBytes(item.WorkingSetBytes), item.Company ?? ""]));
+            _processes.Rows.Add(item.Name, item.Id.ToString(CultureInfo.InvariantCulture), MaintenanceCollectors.FormatBytes(item.WorkingSetBytes), item.Company ?? "");
         }
 
         foreach (var item in events)
         {
-            _events.Items.Add(new ListViewItem([item.Name, item.Count?.ToString(CultureInfo.InvariantCulture) ?? _t["maintenance.unavailable"]]));
+            _events.Rows.Add(item.Name, item.Count?.ToString(CultureInfo.InvariantCulture) ?? _t["maintenance.unavailable"]);
         }
 
-        _status.Text = _t["maintenance.loaded", _startup.Items.Count, _software.Items.Count, _processes.Items.Count];
+        _status.Text = _t["maintenance.loaded", _startup.Rows.Count, _software.Rows.Count, _processes.Rows.Count];
     }
 
     private void UninstallSelected()
     {
-        if (_software.SelectedItems.Count == 0 || _software.SelectedItems[0].Tag is not InstalledProgram program)
+        if (_software.CurrentRow?.Tag is not InstalledProgram program)
         {
             _status.Text = _t["maintenance.noSelection"];
             return;

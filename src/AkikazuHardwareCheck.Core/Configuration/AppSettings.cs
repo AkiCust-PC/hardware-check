@@ -21,6 +21,9 @@ namespace AkikazuHardwareCheck.Core.Configuration;
 /// <param name="IsHardwarePanelHidden">Whether the hardware list is hidden.</param>
 /// <param name="IsTestPanelHidden">Whether the monitoring and test side is hidden.</param>
 /// <param name="IsAlwaysOnTop">Whether the window stays above others.</param>
+/// <param name="ShowTrayIcon">Whether the notification-area icon is shown.</param>
+/// <param name="CloseToTray">Whether closing the main window hides it instead of exiting.</param>
+/// <param name="StartWithWindows">Whether the current user starts the program at sign-in.</param>
 public sealed record AppSettings(
     string? Language = null,
     string? ReportFolder = null,
@@ -38,7 +41,10 @@ public sealed record AppSettings(
     double BackgroundPanY = 0,
     bool IsHardwarePanelHidden = false,
     bool IsTestPanelHidden = false,
-    bool IsAlwaysOnTop = false)
+    bool IsAlwaysOnTop = false,
+    bool ShowTrayIcon = true,
+    bool CloseToTray = true,
+    bool StartWithWindows = false)
 {
     private const string FOLDER_NAME = "AkikazuHardwareCheck";
 
