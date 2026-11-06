@@ -600,6 +600,11 @@ internal sealed class DisplayTestForm : Form, IMessageFilter
 
     private bool IsOverControls()
     {
+        if (!_uiVisible)
+        {
+            return false;
+        }
+
         var point = PointToClient(Cursor.Position);
         return _controls.Bounds.Contains(point) || _rail.Bounds.Contains(point) || _exit.Bounds.Contains(point);
     }

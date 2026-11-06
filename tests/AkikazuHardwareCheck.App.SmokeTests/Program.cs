@@ -1,4 +1,5 @@
 using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 using AkikazuHardwareCheck.App;
 using AkikazuHardwareCheck.Core.Configuration;
 using AkikazuHardwareCheck.Core.Localization;
@@ -166,6 +167,10 @@ internal static class Program
             display.ShowForSmoke(7);
             Pump(400);
             Capture(display, Path.Combine(folder, "display-color-distance.png"));
+            Cursor.Position = display.PointToScreen(new Point(80, 80));
+            _ = PostMessage(display.Handle, 0x020A, (IntPtr)(120 << 16), IntPtr.Zero);
+            Pump(400);
+            Capture(display, Path.Combine(folder, "display-wheel-next.png"));
             display.ShowForSmoke(12);
             Pump(400);
             Capture(display, Path.Combine(folder, "display-response.png"));
@@ -174,6 +179,9 @@ internal static class Program
         Console.WriteLine($"Screenshots written to {Path.GetFullPath(folder)}");
         return 0;
     }
+
+    [DllImport("user32.dll")]
+    private static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
 
     private static HardwareInventory MinimalHardware() => new(
         new ProbeEnvironment(null, WindowsActivation.Unknown, false, false),

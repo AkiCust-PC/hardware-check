@@ -292,6 +292,13 @@ internal sealed class MouseTestView : UserControl
             base.OnMouseDown(e);
         }
 
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            // Wheel messages go to the focused control, so focus on entry lets scrolling count before the first click.
+            Focus();
+            base.OnMouseEnter(e);
+        }
+
         public void ClearTrail()
         {
             _points.Clear();
