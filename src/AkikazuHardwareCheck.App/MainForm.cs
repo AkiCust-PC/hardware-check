@@ -188,6 +188,11 @@ internal sealed class MainForm : Form
         ApplyPanels();
         TopMost = _settings.IsAlwaysOnTop;
         UpdateTrayIcon();
+        // Autostart starts without a taskbar button, so hiding in OnShown does not have to recreate the window.
+        if (_startHidden)
+        {
+            ShowInTaskbar = false;
+        }
     }
 
     private bool IsTestRunning => _testStop is not null;
@@ -199,9 +204,11 @@ internal sealed class MainForm : Form
         UpdateCrosshair();
         UpdateRuler();
         UpdateHud();
-        if (_startHidden && _settings is { ShowTrayIcon: true, CloseToTray: true })
+        // Autostart asks for a silent background start; whether an icon is shown is a separate setting.
+        // Hiding from inside OnShown is undone by the show sequence, so hide as soon as the message loop runs.
+        if (_startHidden)
         {
-            HideToTray();
+            BeginInvoke(new Action(HideToTray));
         }
 
         _ = LoadHardwareAsync();
@@ -276,9 +283,10 @@ internal sealed class MainForm : Form
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
-        if (!_isExiting && !_closeAfterTest && e.CloseReason == CloseReason.UserClosing && _settings is { CloseToTray: true, ShowTrayIcon: true })
+        if (!_isExiting && !_closeAfterTest && e.CloseReason == CloseReason.UserClosing && _settings.CloseToTray)
         {
-            // Closing is silent: hide to the tray without a balloon or confirmation. A running test keeps running.
+            // Closing is silent: the program keeps running in the background without a balloon or confirmation.
+            // The tray icon only decides whether there is an icon; without one, starting the program again returns here.
             e.Cancel = true;
             HideToTray();
             return;
@@ -1455,11 +1463,6 @@ internal sealed class MainForm : Form
 
     private void SaveSettings(AppSettings settings)
     {
-        if (!settings.ShowTrayIcon && !Visible)
-        {
-            RestoreFromTray();
-        }
-
         if (settings.StartWithWindows != _settings.StartWithWindows)
         {
             try
