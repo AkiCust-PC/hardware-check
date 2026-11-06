@@ -86,6 +86,7 @@ internal sealed class MainForm : Form
     private readonly Button _diskTestButton = Ui.Button();
     private readonly Button _peripheralTestButton = Ui.Button();
     private readonly Button _advancedButton = Ui.Button();
+    private readonly Button _chartButton = Ui.Button();
 
     private readonly Label _overallLabel = Ui.Label(isBold: true);
     private readonly InfoView _resultList = new();
@@ -120,6 +121,8 @@ internal sealed class MainForm : Form
     private ActivityMonitor? _activityMonitor;
     private CancellationTokenSource? _testStop;
     private AdvancedInfoForm? _advancedForm;
+    private LiveChartForm? _chartForm;
+    private ActivitySnapshot? _activitySnapshot;
     private TestRunResult? _lastRun;
     private MemoryTestResult? _memoryResult;
     private DiskTestResult? _diskResult;
@@ -304,7 +307,11 @@ internal sealed class MainForm : Form
         _hardwareGroup = Ui.Section(viewSwitch, BuildHardwareContent());
 
         _phaseLabel.Margin = new Padding(0, 0, 0, Ui.SPACING / 2);
-        _monitorGroup = Ui.Section(null, BuildMonitorPanel());
+        _chartButton.Text = _t["ui.liveChart"];
+        _chartButton.MinimumSize = new Size(0, Ui.BUTTON_MIN_HEIGHT);
+        _chartButton.Margin = new Padding(0);
+        _chartButton.Click += (_, _) => ShowLiveChart();
+        _monitorGroup = Ui.Section(_chartButton, BuildMonitorPanel());
         _controlGroup = Ui.Section(null, BuildControlPanel());
         _detailsButton.Margin = new Padding(0, 0, 0, Ui.SPACING / 2);
         _resultGroup = Ui.Section(null, BuildResultPanel());
@@ -887,6 +894,8 @@ internal sealed class MainForm : Form
         // than trying to relabel a tree that may already be filtered.
         _advancedForm?.Close();
         _advancedForm = null;
+        _chartForm?.Close();
+        _chartForm = null;
 
         Font = Ui.FontFor(_t.Language);
         BuildMenu();
@@ -928,6 +937,7 @@ internal sealed class MainForm : Form
         _diskTestButton.Text = _t["ui.diskTest"];
         _peripheralTestButton.Text = _t["ui.peripheralTest"];
         _advancedButton.Text = _t["ui.advancedInfo"];
+        _chartButton.Text = _t["ui.liveChart"];
         StyleViewSwitch();
 
         if (!IsTestRunning)
@@ -1006,6 +1016,7 @@ internal sealed class MainForm : Form
 
     private void ShowActivity(ActivitySnapshot snapshot)
     {
+        _activitySnapshot = snapshot;
         ShowUsage(_memoryLoadTile, Format(snapshot.MemoryLoadPercent, "0", "%"), snapshot.MemoryLoadPercent / PERCENT);
         ShowUsage(_diskLoadTile, Format(snapshot.DiskBusyPercent, "0", "%"), snapshot.DiskBusyPercent / PERCENT);
         ShowUsage(_uploadTile, Ui.FormatRate(snapshot.UploadBytesPerSecond), MetricLevels.LinkFraction(snapshot.UploadBytesPerSecond, _hardware?.Network));
@@ -1036,6 +1047,42 @@ internal sealed class MainForm : Form
         form.FormClosed += (_, _) => _advancedForm = null;
         _advancedForm = form;
         form.Show(this);
+    }
+
+    private void ShowLiveChart()
+    {
+        if (_hardware is null)
+        {
+            return;
+        }
+
+        if (_chartForm is { IsDisposed: false })
+        {
+            _chartForm.Activate();
+            return;
+        }
+
+        var form = new LiveChartForm(_t, CurrentLiveSnapshot, Font);
+        form.FormClosed += (_, _) => _chartForm = null;
+        _chartForm = form;
+        form.Show(this);
+        form.Activate();
+    }
+
+    private LiveSnapshot CurrentLiveSnapshot()
+    {
+        var model = SelectedTarget()?.Model;
+        return new LiveSnapshot(
+            DateTimeOffset.Now,
+            SensorSelector.CpuLoad(_sensors),
+            SensorSelector.CpuTemperature(_sensors),
+            SensorSelector.GpuLoad(_sensors, model),
+            SensorSelector.GpuTemperature(_sensors, model),
+            _activitySnapshot?.MemoryLoadPercent,
+            _activitySnapshot?.DiskBusyPercent,
+            _activitySnapshot?.UploadBytesPerSecond,
+            _activitySnapshot?.DownloadBytesPerSecond,
+            _activitySnapshot?.NetworkAdapter);
     }
 
     private AdvancedSnapshot BuildAdvancedSnapshot() =>
@@ -1475,6 +1522,7 @@ internal sealed class MainForm : Form
         _diskTestButton.Enabled = isReady && !isRunning;
         _peripheralTestButton.Enabled = isReady && !isRunning;
         _advancedButton.Enabled = isReady;
+        _chartButton.Enabled = isReady;
         _elevateButton.Enabled = !isRunning;
         if (_menu is { } menu)
         {

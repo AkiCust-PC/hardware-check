@@ -291,6 +291,7 @@
   "ui.hardware": "硬體資訊",
   "ui.licenses": "第三方授權",
   "ui.loading": "正在讀取硬體資訊…",
+  "ui.liveChart": "即時曲線",
   "ui.memoryLoad": "記憶體使用率",
   "ui.memoryTest": "記憶體測試",
   "ui.menuFile": "檔案(&F)",
@@ -504,5 +505,14 @@
   "maintenance.uninstallStarted": "已啟動 {0} 的解除安裝程式。",
   "maintenance.openFailed": "無法開啟：{0}",
   "maintenance.pid": "PID",
-  "maintenance.memory": "記憶體"
+  "maintenance.memory": "記憶體",
+  "liveChart.title": "即時曲線",
+  "liveChart.utilization": "使用率",
+  "liveChart.network": "網路",
+  "liveChart.cpu": "處理器",
+  "liveChart.gpu": "顯示卡",
+  "liveChart.memory": "記憶體",
+  "liveChart.disk": "硬碟",
+  "liveChart.upload": "上傳",
+  "liveChart.download": "下載"
 }

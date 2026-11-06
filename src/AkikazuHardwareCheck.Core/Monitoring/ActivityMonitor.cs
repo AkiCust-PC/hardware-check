@@ -4,7 +4,7 @@ using AkikazuHardwareCheck.Core.Hardware;
 
 namespace AkikazuHardwareCheck.Core.Monitoring;
 
-public sealed record ActivitySnapshot(int? MemoryLoadPercent, double? DiskBusyPercent, double? UploadBytesPerSecond, double? DownloadBytesPerSecond);
+public sealed record ActivitySnapshot(int? MemoryLoadPercent, double? DiskBusyPercent, double? UploadBytesPerSecond, double? DownloadBytesPerSecond, string? NetworkAdapter = null);
 
 /// <summary>
 /// Reads memory, disk and network activity once a second from Windows itself. None of these need administrator rights,
@@ -23,7 +23,8 @@ public sealed class ActivityMonitor : IDisposable
     private Thread? _thread;
     private IntPtr _query;
     private IntPtr _counter;
-    private List<NetworkInterface> _adapters = [];
+    private NetworkInterface? _adapter;
+    private string? _adapterName;
     private int _ticksUntilRefresh;
     private long? _lastSent;
     private long? _lastReceived;
@@ -69,7 +70,7 @@ public sealed class ActivityMonitor : IDisposable
         while (!_stop.IsSet)
         {
             var (upload, download) = ReadNetwork();
-            Sampled?.Invoke(new ActivitySnapshot(ReadMemoryLoad(), ReadDiskBusy(), upload, download));
+            Sampled?.Invoke(new ActivitySnapshot(ReadMemoryLoad(), ReadDiskBusy(), upload, download, _adapterName));
             _stop.Wait(Interval);
         }
     }
@@ -106,28 +107,65 @@ public sealed class ActivityMonitor : IDisposable
         return GlobalMemoryStatusEx(ref status) ? (int)status.MemoryLoad : null;
     }
 
+    /// <summary>One representative connection, so a Wi-Fi and Ethernet pair is never added together.</summary>
+    private static NetworkInterface? ChooseAdapter()
+    {
+        try
+        {
+            var connected = NetworkInterface.GetAllNetworkInterfaces()
+                .Where(adapter => adapter.OperationalStatus == OperationalStatus.Up
+                    && adapter.NetworkInterfaceType is NetworkInterfaceType.Ethernet or NetworkInterfaceType.Wireless80211
+                    && NetworkCollector.IsPhysical(adapter.Description)
+                    && HasGateway(adapter))
+                .ToList();
+            return connected.FirstOrDefault(adapter => adapter.NetworkInterfaceType == NetworkInterfaceType.Ethernet)
+                ?? connected.FirstOrDefault(adapter => adapter.NetworkInterfaceType == NetworkInterfaceType.Wireless80211);
+        }
+        catch (NetworkInformationException)
+        {
+            return null;
+        }
+    }
+
+    private static bool HasGateway(NetworkInterface adapter)
+    {
+        try
+        {
+            return adapter.GetIPProperties().GatewayAddresses.Count > 0;
+        }
+        catch (NetworkInformationException)
+        {
+            return false;
+        }
+    }
+
     private (double? Upload, double? Download) ReadNetwork()
     {
         try
         {
             if (_ticksUntilRefresh-- <= 0)
             {
-                _adapters = NetworkInterface.GetAllNetworkInterfaces()
-                    .Where(adapter => adapter.OperationalStatus == OperationalStatus.Up
-                        && adapter.NetworkInterfaceType is NetworkInterfaceType.Ethernet or NetworkInterfaceType.Wireless80211
-                        && NetworkCollector.IsPhysical(adapter.Description))
-                    .ToList();
+                var previous = _adapterName;
+                _adapter = ChooseAdapter();
+                _adapterName = _adapter?.Description;
+                if (_adapterName != previous)
+                {
+                    // Counters belong to one adapter. Reusing them after a switch would look like a huge burst.
+                    _lastSent = null;
+                    _lastReceived = null;
+                }
+
                 _ticksUntilRefresh = ADAPTER_REFRESH_TICKS;
             }
 
-            var sent = 0L;
-            var received = 0L;
-            foreach (var adapter in _adapters)
+            if (_adapter is null)
             {
-                var statistics = adapter.GetIPStatistics();
-                sent += statistics.BytesSent;
-                received += statistics.BytesReceived;
+                return (null, null);
             }
+
+            var statistics = _adapter.GetIPStatistics();
+            var sent = statistics.BytesSent;
+            var received = statistics.BytesReceived;
 
             var now = DateTime.UtcNow;
             var seconds = (now - _lastSampleAt).TotalSeconds;

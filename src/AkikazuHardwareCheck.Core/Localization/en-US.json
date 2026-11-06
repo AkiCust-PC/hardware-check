@@ -291,6 +291,7 @@
   "ui.hardware": "Hardware",
   "ui.licenses": "Third-party licenses",
   "ui.loading": "Reading hardware…",
+  "ui.liveChart": "Graphs",
   "ui.memoryLoad": "Memory usage",
   "ui.memoryTest": "Memory test",
   "ui.menuFile": "&File",
@@ -504,5 +505,14 @@
   "maintenance.uninstallStarted": "Uninstaller started for {0}.",
   "maintenance.openFailed": "Could not open: {0}",
   "maintenance.pid": "PID",
-  "maintenance.memory": "Memory"
+  "maintenance.memory": "Memory",
+  "liveChart.title": "Live graphs",
+  "liveChart.utilization": "Utilization",
+  "liveChart.network": "Network",
+  "liveChart.cpu": "CPU",
+  "liveChart.gpu": "GPU",
+  "liveChart.memory": "Memory",
+  "liveChart.disk": "Disk",
+  "liveChart.upload": "Upload",
+  "liveChart.download": "Download"
 }

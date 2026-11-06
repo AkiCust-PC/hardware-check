@@ -291,6 +291,7 @@
   "ui.hardware": "ハードウェア情報",
   "ui.licenses": "サードパーティライセンス",
   "ui.loading": "ハードウェア情報を読み取り中…",
+  "ui.liveChart": "グラフ",
   "ui.memoryLoad": "メモリ使用率",
   "ui.memoryTest": "メモリテスト",
   "ui.menuFile": "ファイル(&F)",
@@ -504,5 +505,14 @@
   "maintenance.uninstallStarted": "{0} のアンインストーラーを起動しました。",
   "maintenance.openFailed": "開けませんでした: {0}",
   "maintenance.pid": "PID",
-  "maintenance.memory": "メモリ"
+  "maintenance.memory": "メモリ",
+  "liveChart.title": "リアルタイムグラフ",
+  "liveChart.utilization": "使用率",
+  "liveChart.network": "ネットワーク",
+  "liveChart.cpu": "CPU",
+  "liveChart.gpu": "GPU",
+  "liveChart.memory": "メモリ",
+  "liveChart.disk": "ディスク",
+  "liveChart.upload": "アップロード",
+  "liveChart.download": "ダウンロード"
 }

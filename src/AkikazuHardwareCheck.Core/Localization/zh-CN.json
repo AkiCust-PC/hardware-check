@@ -291,6 +291,7 @@
   "ui.hardware": "硬件信息",
   "ui.licenses": "第三方许可",
   "ui.loading": "正在读取硬件信息…",
+  "ui.liveChart": "实时曲线",
   "ui.memoryLoad": "内存使用率",
   "ui.memoryTest": "内存测试",
   "ui.menuFile": "文件(&F)",
@@ -504,5 +505,14 @@
   "maintenance.uninstallStarted": "已启动 {0} 的卸载程序。",
   "maintenance.openFailed": "无法打开：{0}",
   "maintenance.pid": "PID",
-  "maintenance.memory": "内存"
+  "maintenance.memory": "内存",
+  "liveChart.title": "实时曲线",
+  "liveChart.utilization": "使用率",
+  "liveChart.network": "网络",
+  "liveChart.cpu": "处理器",
+  "liveChart.gpu": "显卡",
+  "liveChart.memory": "内存",
+  "liveChart.disk": "硬盘",
+  "liveChart.upload": "上传",
+  "liveChart.download": "下载"
 }
