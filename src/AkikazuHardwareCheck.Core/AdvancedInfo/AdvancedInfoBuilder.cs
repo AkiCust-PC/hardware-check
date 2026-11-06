@@ -106,7 +106,7 @@ public static class AdvancedInfoBuilder
             fields.Add(Field("cpu.whea", t["summary.whea"], HardwareSummary.WheaText(t, reliability), InfoOrigin.Windows, provenance: new InfoProvenance("Windows", "wevtapi")));
         }
 
-        fields.Add(Missing("cpu.cpuid", t["advanced.cpuid"], InfoState.NotCollected));
+        fields.Add(Missing("cpu.cpuid", t["advanced.cpuid"], InfoState.NotImplemented));
 
         var groups = new List<InfoGroup> { Group("cpu", t["advanced.basic"], fields) };
         AddSensorGroups(groups, t, hardware, sensors, reading => SensorSelector.IsCpu(reading.HardwareType), "cpu.sensors");
@@ -135,8 +135,8 @@ public static class AdvancedInfoBuilder
                 Field($"gpu.{index}.memory", t["advanced.vram"], gpu.DedicatedMemoryBytes is { } bytes ? DisplayNames.MemorySize(bytes) : null, InfoOrigin.Firmware, "GB", Raw(gpu.DedicatedMemoryBytes), provenance: provenance),
                 Field($"gpu.{index}.driver", t["summary.gpuDriver"], DriverText(gpu), InfoOrigin.Driver),
                 Field($"gpu.{index}.luid", t["advanced.luid"], gpu.AdapterLuid, InfoOrigin.Windows, provenance: provenance),
-                Field($"gpu.{index}.boardModel", t["advanced.boardModel"], null, InfoOrigin.Inferred, note: t["advanced.boardModelNote"]),
-                Missing($"gpu.{index}.pcie", t["advanced.pcieLink"], InfoState.NotCollected),
+                Missing($"gpu.{index}.boardModel", t["advanced.boardModel"], InfoState.Unsupported, t["advanced.boardModelNote"]),
+                Missing($"gpu.{index}.pcie", t["advanced.pcieLink"], InfoState.NotImplemented),
             };
             groups.Add(Group($"gpu.{index}", t["section.gpu"] + suffix, fields));
             AddSensorGroups(groups, t, hardware, sensors, reading => SensorSelector.IsGpu(reading.HardwareType) && SensorSelector.MatchesGpu(reading.HardwareType, reading.HardwareName, gpu.Model), $"gpu.{index}.sensors");
@@ -158,8 +158,8 @@ public static class AdvancedInfoBuilder
             Field("motherboard.model", t["section.motherboard"], board.Model, InfoOrigin.Firmware),
             Field("motherboard.bios", t["advanced.biosVersion"], board.BiosVersion, InfoOrigin.Firmware),
             Field("motherboard.biosDate", t["advanced.biosDate"], board.BiosDate, InfoOrigin.Firmware),
-            Missing("motherboard.smbios", t["advanced.smbios"], InfoState.NotCollected),
-            Missing("motherboard.chipset", t["advanced.chipset"], InfoState.NotCollected),
+            Missing("motherboard.smbios", t["advanced.smbios"], InfoState.NotImplemented),
+            Missing("motherboard.chipset", t["advanced.chipset"], InfoState.NotImplemented),
         };
 
         var groups = new List<InfoGroup> { Group("motherboard", t["section.motherboard"], fields) };
@@ -196,7 +196,7 @@ public static class AdvancedInfoBuilder
             groups.Add(Group($"memory.{index}", $"{t["section.memory"]} {module.Slot ?? (index + 1).ToString(CultureInfo.InvariantCulture)}", fieldsForModule));
         }
 
-        groups.Add(Group("memory.spd", t["advanced.spd"], [Missing("memory.spd.value", t["advanced.spd"], InfoState.NotCollected)]));
+        groups.Add(Group("memory.spd", t["advanced.spd"], [Missing("memory.spd.value", t["advanced.spd"], InfoState.NotImplemented)]));
         return Node("memory", t["section.memory"], groups);
     }
 
@@ -229,7 +229,7 @@ public static class AdvancedInfoBuilder
                     : new InfoProvenance("DiskInfoToolkit", "SMART");
                 fields.Add(Field($"storage.{index}.health", t["disk.status"], t[EnumText.Key("diskHealth", health.Status)], InfoOrigin.Driver, provenance: healthSource));
                 fields.Add(Field($"storage.{index}.life", t["disk.life"], health.LifePercent is { } life ? $"{life}%" : null, InfoOrigin.Driver, "%", Raw(health.LifePercent), provenance: healthSource));
-                fields.Add(Field($"storage.{index}.temperature", t["disk.temperature"], health.TemperatureCelsius is { } temperature ? $"{temperature}°C" : null, InfoOrigin.Driver, "°C", Raw(health.TemperatureCelsius), provenance: healthSource));
+                fields.Add(Field($"storage.{index}.temperature", t["disk.temperature"], health.TemperatureCelsius is { } temperature ? $"{temperature}掳C" : null, InfoOrigin.Driver, "掳C", Raw(health.TemperatureCelsius), provenance: healthSource));
                 fields.Add(Field($"storage.{index}.powerOn", t["disk.powerOnHours"], health.PowerOnHours?.ToString("N0", CultureInfo.InvariantCulture), InfoOrigin.Driver, provenance: healthSource));
                 fields.Add(Field($"storage.{index}.written", t["disk.dataWritten"], health.DataWrittenBytes is { } written ? DisplayNames.DiskSize(written) : null, InfoOrigin.Driver, null, Raw(health.DataWrittenBytes), provenance: healthSource));
                 fields.Add(Field($"storage.{index}.mediaErrors", t["disk.mediaErrors"], health.MediaErrors?.ToString("N0", CultureInfo.InvariantCulture), InfoOrigin.Driver, provenance: healthSource));
@@ -239,7 +239,7 @@ public static class AdvancedInfoBuilder
                 fields.Add(Missing($"storage.{index}.health", t["disk.status"], InfoState.NotCollected));
             }
 
-            fields.Add(Missing($"storage.{index}.volumes", t["advanced.volumes"], InfoState.NotCollected));
+            fields.Add(Missing($"storage.{index}.volumes", t["advanced.volumes"], InfoState.NotImplemented));
             groups.Add(Group($"storage.{index}", t["section.disks"], fields));
         }
 
@@ -265,13 +265,13 @@ public static class AdvancedInfoBuilder
                 Field($"display.{index}.name", t["section.displays"], display.Name, InfoOrigin.Firmware, provenance: monitor),
                 Field($"display.{index}.manufacturer", t["cpu.manufacturer"], display.ManufacturerCode, InfoOrigin.Firmware, provenance: monitor),
                 Field($"display.{index}.product", t["advanced.productCode"], display.ProductCode, InfoOrigin.Firmware, provenance: monitor),
-                Field($"display.{index}.resolution", t["advanced.resolution"], display.WidthPixels is { } width && display.HeightPixels is { } height ? $"{width} × {height}" : null, InfoOrigin.Windows, provenance: displayConfig),
+                Field($"display.{index}.resolution", t["advanced.resolution"], display.WidthPixels is { } width && display.HeightPixels is { } height ? $"{width} 脳 {height}" : null, InfoOrigin.Windows, provenance: displayConfig),
                 Field($"display.{index}.refresh", t["advanced.refreshRate"], display.RefreshRateHz is { } rate ? $"{Math.Round(rate).ToString(CultureInfo.InvariantCulture)} Hz" : null, InfoOrigin.Windows, provenance: displayConfig),
                 Field($"display.{index}.diagonal", t["advanced.diagonal"], display.DiagonalInches is { } inches ? $"{inches.ToString("0.#", CultureInfo.InvariantCulture)}" : null, InfoOrigin.Firmware, "in", provenance: monitor),
                 Field($"display.{index}.connection", t["advanced.connection"], display.Connection, InfoOrigin.Windows, provenance: displayConfig),
                 Field($"display.{index}.primary", t["advanced.primary"], display.IsPrimary ? t["common.yes"] : t["common.no"], InfoOrigin.Windows, provenance: displayConfig),
                 Field($"display.{index}.gpu", t["advanced.connectedGpu"], display.ConnectedGpu, InfoOrigin.Windows, provenance: displayConfig),
-                Missing($"display.{index}.hdr", t["advanced.hdr"], InfoState.NotCollected),
+                Missing($"display.{index}.hdr", t["advanced.hdr"], InfoState.NotImplemented),
             };
             groups.Add(Group($"display.{index}", t["section.displays"], fields));
         }
@@ -299,7 +299,7 @@ public static class AdvancedInfoBuilder
         groups.Add(Group("network", t["summary.network"], fields));
         AddAdapterGroup(groups, t, "network.wired", t["summary.wiredCard"], hardware.WiredAdapters);
         AddAdapterGroup(groups, t, "network.wireless", t["summary.wirelessCard"], hardware.WirelessAdapters);
-        groups.Add(Group("network.bluetooth", t["advanced.bluetooth"], [Missing("network.bluetooth.value", t["advanced.bluetooth"], InfoState.NotCollected)]));
+        groups.Add(Group("network.bluetooth", t["advanced.bluetooth"], [Missing("network.bluetooth.value", t["advanced.bluetooth"], InfoState.NotImplemented)]));
         return Node("network", t["summary.network"], groups);
     }
 
@@ -326,7 +326,7 @@ public static class AdvancedInfoBuilder
         }
 
         groups.Add(Group("peripheral", t["advanced.peripherals"], fields));
-        groups.Add(Group("peripheral.usbPci", t["advanced.usbPci"], [Missing("peripheral.usbPci.value", t["advanced.usbPci"], InfoState.NotCollected)]));
+        groups.Add(Group("peripheral.usbPci", t["advanced.usbPci"], [Missing("peripheral.usbPci.value", t["advanced.usbPci"], InfoState.NotImplemented)]));
         return Node("peripheral", t["advanced.peripherals"], groups);
     }
 
@@ -346,7 +346,7 @@ public static class AdvancedInfoBuilder
             fields.Add(Field("battery.health", t["summary.battery"], t["summary.batteryValue", battery.HealthPercent, DisplayNames.WattHours(battery.FullMilliwattHours), DisplayNames.WattHours(battery.DesignedMilliwattHours)], InfoOrigin.Firmware));
         }
 
-        fields.Add(Missing("power.manual", t["advanced.psuCaseCooler"], InfoState.NotCollected));
+        fields.Add(Missing("power.manual", t["advanced.psuCaseCooler"], InfoState.NotImplemented));
         return Node("cooling", t["advanced.coolingPower"], [Group("cooling", t["advanced.coolingPower"], fields)]);
     }
 
@@ -377,7 +377,7 @@ public static class AdvancedInfoBuilder
         }
 
         fields.Add(Field("windows.whea", t["summary.whea"], HardwareSummary.WheaText(t, hardware.Reliability), InfoOrigin.Windows));
-        fields.Add(Missing("windows.updates", t["advanced.windowsUpdates"], InfoState.NotCollected));
+        fields.Add(Missing("windows.updates", t["advanced.windowsUpdates"], InfoState.NotImplemented));
         return Node("windows", t["summary.system"], [Group("windows", t["summary.system"], fields)]);
     }
 
@@ -389,8 +389,8 @@ public static class AdvancedInfoBuilder
             fields.Add(Field($"software.driver.{gpu.Model}", t["summary.gpuDriver"], DriverText(gpu), InfoOrigin.Driver));
         }
 
-        fields.Add(Missing("software.drivers", t["advanced.driverList"], InfoState.NotCollected));
-        fields.Add(Missing("software.installed", t["advanced.installedSoftware"], InfoState.NotCollected));
+        fields.Add(Missing("software.drivers", t["advanced.driverList"], InfoState.NotImplemented));
+        fields.Add(Missing("software.installed", t["advanced.installedSoftware"], InfoState.NotImplemented));
         return Node("software", t["advanced.softwareDrivers"], [Group("software", t["advanced.softwareDrivers"], fields)]);
     }
 
@@ -399,7 +399,7 @@ public static class AdvancedInfoBuilder
         var fields = new List<InfoField>
         {
             Field("log.whea", t["summary.whea"], HardwareSummary.WheaText(t, hardware.Reliability), InfoOrigin.Windows),
-            Missing("log.details", t["advanced.eventLogDetails"], InfoState.NotCollected),
+            Missing("log.details", t["advanced.eventLogDetails"], InfoState.NotImplemented),
         };
         return Node("log", t["advanced.eventLog"], [Group("log", t["advanced.eventLog"], fields)]);
     }

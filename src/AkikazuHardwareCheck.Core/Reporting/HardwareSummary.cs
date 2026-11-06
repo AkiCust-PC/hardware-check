@@ -72,8 +72,7 @@ public static class HardwareSummary
             AddIfRead(t["summary.system"], FormatSystem(t, hardware.Environment));
             if (hardware.Locale is { } locale)
             {
-                lines.Add(new SummaryLine(t["summary.language"], FormatLocale(t, locale)));
-                lines.Add(new SummaryLine(t["summary.encoding"], DisplayNames.EncodingName(locale.AnsiCodePage)));
+                lines.Add(new SummaryLine(t["summary.languageEnvironment"], $"{FormatLocale(t, locale)} · {DisplayNames.EncodingName(locale.AnsiCodePage)}"));
             }
 
             AddIfRead(t["summary.secureBoot"], FormatSecurity(t, hardware.Security));
@@ -118,19 +117,19 @@ public static class HardwareSummary
     /// <summary>When Windows was installed and last started, shown at the very end of the full list.</summary>
     public static List<SummaryLine> HistoryLines(Translator t, HardwareInventory hardware)
     {
-        var lines = new List<SummaryLine>();
+        var parts = new List<string>();
         if (hardware.Environment.OperatingSystem?.InstallDate is { } installed)
         {
-            lines.Add(new SummaryLine(t["summary.installDate"], installed));
+            parts.Add($"{t["summary.installDate"]} {installed}");
         }
 
         if (hardware.Reliability?.LastBootAt is { } bootedAt)
         {
             var hours = (long)(DateTimeOffset.Now - bootedAt).TotalHours;
-            lines.Add(new SummaryLine(t["summary.lastBoot"], t["summary.lastBootValue", bootedAt.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture), hours]));
+            parts.Add($"{t["summary.lastBoot"]} {t["summary.lastBootValue", bootedAt.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture), hours]}");
         }
 
-        return lines;
+        return parts.Count == 0 ? [] : [new SummaryLine(t["summary.systemRecord"], string.Join(" · ", parts))];
     }
 
     /// <summary>Windows hardware errors over the recent window, or null when the log could not be read.</summary>

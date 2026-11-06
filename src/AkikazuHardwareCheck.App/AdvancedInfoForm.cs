@@ -20,10 +20,29 @@ internal sealed class AdvancedInfoForm : Form
     private readonly Func<AdvancedSnapshot> _rebuild;
     private readonly TreeView _tree = new() { Dock = DockStyle.Fill, HideSelection = false, FullRowSelect = true };
     private readonly SplitContainer _split = new() { Dock = DockStyle.Fill, Orientation = Orientation.Vertical, FixedPanel = FixedPanel.Panel1 };
-    private readonly ListView _list = new() { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = true, MultiSelect = false };
+    private readonly DataGridView _grid = new()
+    {
+        Dock = DockStyle.Fill,
+        ReadOnly = true,
+        AllowUserToAddRows = false,
+        AllowUserToDeleteRows = false,
+        AllowUserToResizeRows = false,
+        AllowUserToResizeColumns = true,
+        AllowUserToOrderColumns = true,
+        RowHeadersVisible = false,
+        MultiSelect = false,
+        SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+        AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+        AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.DisplayedCells,
+        ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize,
+        BackgroundColor = SystemColors.Window,
+        BorderStyle = BorderStyle.FixedSingle,
+    };
     private readonly TextBox _search = new() { Width = 220, Margin = new Padding(0, 0, Ui.SPACING, 0) };
     private readonly TextBox _details = new() { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill, WordWrap = true };
     private readonly Label _status = Ui.Label();
+    private readonly IReadOnlyList<Translator> _searchLanguages;
+    private readonly Dictionary<string, List<string>> _labelKeys;
     private AdvancedSnapshot _snapshot;
 
     public AdvancedInfoForm(Translator t, AdvancedSnapshot snapshot, Func<AdvancedSnapshot> rebuild, Font font)
@@ -31,6 +50,8 @@ internal sealed class AdvancedInfoForm : Form
         _t = t;
         _snapshot = snapshot;
         _rebuild = rebuild;
+        _searchLanguages = AppLanguage.Supported.Select(Translator.Load).ToList();
+        _labelKeys = BuildLabelIndex(_searchLanguages);
         Font = font;
         Icon = Ui.AppIcon;
         Text = t["advanced.title"];
@@ -38,11 +59,20 @@ internal sealed class AdvancedInfoForm : Form
         ClientSize = new Size(LogicalToDeviceUnits(960), LogicalToDeviceUnits(640));
         MinimumSize = new Size(LogicalToDeviceUnits(800), LogicalToDeviceUnits(520));
 
-        _list.Columns.Add(t["advanced.attribute"], LogicalToDeviceUnits(170));
-        _list.Columns.Add(t["advanced.value"], LogicalToDeviceUnits(260));
-        _list.Columns.Add(t["advanced.status"], LogicalToDeviceUnits(90));
-        _list.Columns.Add(t["advanced.source"], LogicalToDeviceUnits(120));
-        _list.SelectedIndexChanged += (_, _) => ShowField();
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "category", HeaderText = t["advanced.category"], FillWeight = 12, MinimumWidth = LogicalToDeviceUnits(80), SortMode = DataGridViewColumnSortMode.Automatic });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "group", HeaderText = t["advanced.group"], FillWeight = 16, MinimumWidth = LogicalToDeviceUnits(90), SortMode = DataGridViewColumnSortMode.Automatic });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "property", HeaderText = t["advanced.attribute"], FillWeight = 24, MinimumWidth = LogicalToDeviceUnits(120), SortMode = DataGridViewColumnSortMode.Automatic });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "value", HeaderText = t["advanced.value"], FillWeight = 28, MinimumWidth = LogicalToDeviceUnits(140), SortMode = DataGridViewColumnSortMode.Automatic });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "status", HeaderText = t["advanced.status"], FillWeight = 10, MinimumWidth = LogicalToDeviceUnits(70), SortMode = DataGridViewColumnSortMode.Automatic });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "source", HeaderText = t["advanced.source"], FillWeight = 10, MinimumWidth = LogicalToDeviceUnits(70), SortMode = DataGridViewColumnSortMode.Automatic });
+        _grid.SelectionChanged += (_, _) => ShowField();
+        _grid.ColumnHeaderMouseClick += (_, e) =>
+        {
+            if (e.Button == MouseButtons.Right)
+            {
+                ShowColumnMenu(e.Location);
+            }
+        };
         _tree.AfterSelect += (_, _) => ShowNode();
         _search.TextChanged += (_, _) => PopulateTree();
 
@@ -60,8 +90,6 @@ internal sealed class AdvancedInfoForm : Form
         top.Controls.Add(_search);
 
         AddButton(top, _t["advanced.refresh"], (_, _) => RefreshSnapshot());
-        AddButton(top, _t["advanced.expandAll"], (_, _) => _tree.ExpandAll());
-        AddButton(top, _t["advanced.collapseAll"], (_, _) => _tree.CollapseAll());
         AddButton(top, _t["advanced.copy"], (_, _) => CopySelected());
         AddButton(top, _t["advanced.export"], (_, _) => ExportSnapshot());
 
@@ -71,7 +99,7 @@ internal sealed class AdvancedInfoForm : Form
         right.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         right.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(DETAILS_HEIGHT)));
-        right.Controls.Add(_list, 0, 0);
+        right.Controls.Add(_grid, 0, 0);
         right.Controls.Add(_details, 0, 1);
         _split.Panel2.Controls.Add(right);
 
@@ -128,14 +156,14 @@ internal sealed class AdvancedInfoForm : Form
         }
         else
         {
-            _list.Items.Clear();
+            _grid.Rows.Clear();
             _details.Text = _t["advanced.noSelection"];
         }
 
         _tree.EndUpdate();
     }
 
-    private static TreeNode CreateTreeNode(InfoNode node, string query)
+    private TreeNode CreateTreeNode(InfoNode node, string query)
     {
         var treeNode = new TreeNode(node.Label) { Tag = node };
         foreach (var child in (node.Children ?? []).Where(item => Matches(item, query)))
@@ -146,65 +174,106 @@ internal sealed class AdvancedInfoForm : Form
         return treeNode;
     }
 
-    private static bool Matches(InfoNode node, string query)
+    private bool Matches(InfoNode node, string query)
     {
         if (query.Length == 0)
         {
             return true;
         }
 
-        if (node.Label.Contains(query, StringComparison.OrdinalIgnoreCase))
+        if (MatchesLabel(node.Label, query))
         {
             return true;
         }
 
         return node.SelfAndDescendants().Any(item =>
-            item.Groups.Any(group => group.Label.Contains(query, StringComparison.OrdinalIgnoreCase)
+            item.Groups.Any(group => MatchesLabel(group.Label, query)
                 || group.Fields.Any(field => Matches(field, query))));
     }
 
-    private static bool Matches(InfoField field, string query) =>
-        field.Label.Contains(query, StringComparison.OrdinalIgnoreCase)
+    private bool Matches(InfoField field, string query) =>
+        MatchesLabel(field.Label, query)
+        || field.Key.Contains(query, StringComparison.OrdinalIgnoreCase)
         || (field.Value?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
         || (field.RawValue?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
         || (field.Note?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
         || (field.Provenance?.Source.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
         || (field.Provenance?.Api.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false);
 
-    private void ShowNode()
+    /// <summary>The displayed label is enough to find its localization key; all four languages are then searched.</summary>
+    private bool MatchesLabel(string label, string query)
     {
-        _list.BeginUpdate();
-        _list.Items.Clear();
-        if (_tree.SelectedNode?.Tag is InfoNode node)
+        if (label.Contains(query, StringComparison.OrdinalIgnoreCase))
         {
-            foreach (var group in node.Groups)
-            {
-                _list.Items.Add(new ListViewItem(group.Label) { ForeColor = Ui.MutedTextColor });
-                foreach (var field in group.Fields)
-                {
-                    var value = field.Value ?? StateText(field.State);
-                    var item = new ListViewItem([field.Label, value, StateText(field.State), field.Provenance?.Source ?? ""]) { Tag = field };
-                    if (field.State == InfoState.ReadFailed)
-                    {
-                        item.ForeColor = Ui.AlertColor;
-                    }
-                    else if (!field.HasValue)
-                    {
-                        item.ForeColor = Ui.MutedTextColor;
-                    }
+            return true;
+        }
 
-                    _list.Items.Add(item);
+        return _labelKeys.TryGetValue(label, out var keys)
+            && keys.Any(key => _searchLanguages.Any(language => language[key].Contains(query, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static Dictionary<string, List<string>> BuildLabelIndex(IReadOnlyList<Translator> languages)
+    {
+        var index = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var language in languages)
+        {
+            foreach (var key in language.Keys)
+            {
+                var text = language[key];
+                if (text.Contains('{'))
+                {
+                    continue;
+                }
+
+                if (!index.TryGetValue(text, out var keys))
+                {
+                    keys = [];
+                    index[text] = keys;
+                }
+
+                if (!keys.Contains(key))
+                {
+                    keys.Add(key);
                 }
             }
         }
 
-        _list.EndUpdate();
+        return index;
+    }
+
+    private void ShowNode()
+    {
+        _grid.SuspendLayout();
+        _grid.Rows.Clear();
+        if (_tree.SelectedNode?.Tag is InfoNode node)
+        {
+            foreach (var group in node.Groups)
+            {
+                foreach (var field in group.Fields)
+                {
+                    var value = field.Value ?? StateText(field.State);
+                    var index = _grid.Rows.Add(node.Label, group.Label, field.Label, value, StateText(field.State), field.Provenance?.Source ?? "");
+                    var row = _grid.Rows[index];
+                    row.Tag = field;
+                    if (field.State == InfoState.ReadFailed)
+                    {
+                        row.DefaultCellStyle.ForeColor = Ui.AlertColor;
+                    }
+                    else if (!field.HasValue)
+                    {
+                        row.DefaultCellStyle.ForeColor = Ui.MutedTextColor;
+                    }
+                }
+            }
+        }
+
+        _grid.ResumeLayout();
         _details.Text = "";
     }
 
     private void ShowField()
     {
-        if (_list.SelectedItems.Count == 0 || _list.SelectedItems[0].Tag is not InfoField field)
+        if (_grid.CurrentRow?.Tag is not InfoField field)
         {
             _details.Text = _t["advanced.noSelection"];
             return;
@@ -241,6 +310,32 @@ internal sealed class AdvancedInfoForm : Form
         }
 
         _details.Text = string.Join(Environment.NewLine, lines);
+    }
+
+    private void ShowColumnMenu(Point location)
+    {
+        var menu = new ContextMenuStrip();
+        foreach (var column in _grid.Columns.Cast<DataGridViewColumn>())
+        {
+            var item = new ToolStripMenuItem(column.HeaderText) { Checked = column.Visible, CheckOnClick = true };
+            item.Click += (_, _) =>
+            {
+                if (!item.Checked && _grid.Columns.Cast<DataGridViewColumn>().Count(candidate => candidate.Visible) <= 1)
+                {
+                    item.Checked = true;
+                    return;
+                }
+
+                column.Visible = item.Checked;
+            };
+            menu.Items.Add(item);
+        }
+
+        menu.Items.Add(new ToolStripSeparator());
+        var showAll = new ToolStripMenuItem(_t["advanced.showAllColumns"]);
+        showAll.Click += (_, _) => _grid.Columns.Cast<DataGridViewColumn>().ToList().ForEach(column => column.Visible = true);
+        menu.Items.Add(showAll);
+        menu.Show(_grid, location);
     }
 
     private void CopySelected()

@@ -11,6 +11,8 @@ internal sealed class SettingsForm : Form
     private const int MAX_STRESS_SECONDS = 300;
     private const int MIN_LIMIT_CELSIUS = 60;
     private const int MAX_LIMIT_CELSIUS = 110;
+    private const int MIN_FAN_REFERENCE_RPM = 0;
+    private const int MAX_FAN_REFERENCE_RPM = 10000;
     private const int LABEL_WIDTH = 220;
     private const int FOLDER_BOX_WIDTH = 330;
     private const string LICENSE_PREFIX = "license.";
@@ -21,6 +23,7 @@ internal sealed class SettingsForm : Form
     private readonly NumericUpDown _cpuSeconds = Number(MIN_STRESS_SECONDS, MAX_STRESS_SECONDS);
     private readonly NumericUpDown _cpuLimit = Number(MIN_LIMIT_CELSIUS, MAX_LIMIT_CELSIUS);
     private readonly NumericUpDown _gpuLimit = Number(MIN_LIMIT_CELSIUS, MAX_LIMIT_CELSIUS);
+    private readonly NumericUpDown _fanReference = Number(MIN_FAN_REFERENCE_RPM, MAX_FAN_REFERENCE_RPM);
 
     public SettingsForm(Translator t, AppSettings settings, Font font)
     {
@@ -42,6 +45,8 @@ internal sealed class SettingsForm : Form
         _cpuSeconds.Value = (decimal)profile.CpuStressSeconds;
         _cpuLimit.Value = (decimal)Math.Clamp(profile.CpuProtectionCelsius, MIN_LIMIT_CELSIUS, MAX_LIMIT_CELSIUS);
         _gpuLimit.Value = (decimal)Math.Clamp(profile.GpuProtectionCelsius, MIN_LIMIT_CELSIUS, MAX_LIMIT_CELSIUS);
+        _fanReference.Value = (decimal)Math.Clamp(settings.FanReferenceRpm, MIN_FAN_REFERENCE_RPM, MAX_FAN_REFERENCE_RPM);
+        _fanReference.Increment = 100;
 
         var browseButton = Ui.Button();
         browseButton.Text = t["ui.browse"];
@@ -58,6 +63,7 @@ internal sealed class SettingsForm : Form
         AddField(fields, t["ui.cpuSeconds"], _cpuSeconds);
         AddField(fields, t["ui.cpuLimit"], _cpuLimit);
         AddField(fields, t["ui.gpuLimit"], _gpuLimit);
+        AddField(fields, t["ui.fanReference"], _fanReference);
 
         var okButton = Ui.Button();
         okButton.Text = t["ui.ok"];
@@ -87,6 +93,7 @@ internal sealed class SettingsForm : Form
         CpuStressSeconds = (double)_cpuSeconds.Value,
         CpuProtectionCelsius = (double)_cpuLimit.Value,
         GpuProtectionCelsius = (double)_gpuLimit.Value,
+        FanReferenceRpm = (double)_fanReference.Value,
     };
 
     private static NumericUpDown Number(int minimum, int maximum) => new()

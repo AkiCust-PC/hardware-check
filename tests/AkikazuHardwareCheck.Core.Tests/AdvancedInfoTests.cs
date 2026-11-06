@@ -1,4 +1,5 @@
 using AkikazuHardwareCheck.Core.AdvancedInfo;
+using AkikazuHardwareCheck.Core.Diagnostics;
 using AkikazuHardwareCheck.Core.Localization;
 using AkikazuHardwareCheck.Core.Models;
 
@@ -84,12 +85,12 @@ public class AdvancedInfoTests
     }
 
     [Fact]
-    public void MissingAdvancedDataIsExplicitlyNotCollected()
+    public void MissingAdvancedDataIsExplicitlyMarked()
     {
         var snapshot = AdvancedInfoBuilder.Build(Translator.Load(AppLanguage.SIMPLIFIED_CHINESE), Hardware(), Sensors(), Now);
 
-        Assert.Contains(snapshot.AllFields(), field => field.Key == "cpu.cpuid" && field.State == InfoState.NotCollected);
-        Assert.Contains(snapshot.AllFields(), field => field.Key == "display.0.hdr" && field.State == InfoState.NotCollected);
+        Assert.Contains(snapshot.AllFields(), field => field.Key == "cpu.cpuid" && field.State == InfoState.NotImplemented);
+        Assert.Contains(snapshot.AllFields(), field => field.Key == "display.0.hdr" && field.State == InfoState.NotImplemented);
     }
 
     [Fact]
@@ -101,6 +102,14 @@ public class AdvancedInfoTests
         Assert.Contains("\"Roots\"", json);
         Assert.Contains("\"Origin\": \"Driver\"", json);
         Assert.DoesNotContain("SerialNumber", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void MaintenanceFormatsStayReadable()
+    {
+        Assert.Equal("2026-05-12", MaintenanceCollectors.FormatInstallDate("20260512"));
+        Assert.Equal("", MaintenanceCollectors.FormatInstallDate(null));
+        Assert.Equal("16 MB", MaintenanceCollectors.FormatBytes(16L * 1024 * 1024));
     }
 
     [Fact]

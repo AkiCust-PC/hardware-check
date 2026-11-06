@@ -11,6 +11,7 @@ public enum InfoState
     InterfaceUnavailable,
     ReadFailed,
     NotCollected,
+    NotImplemented,
 }
 
 /// <summary>Where a value came from. A value read from firmware is not the same as one calculated by this tool.</summary>

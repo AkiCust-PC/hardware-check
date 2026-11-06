@@ -30,12 +30,12 @@ internal sealed class MainForm : Form
         (AppLanguage.ENGLISH, "English"),
     ];
 
-    private const int MONITOR_SECTION_HEIGHT = 205;
+    private const int MONITOR_SECTION_HEIGHT = 197;
     private const int METRIC_ROW_HEIGHT = 46;
-    private const int CONTROL_SECTION_HEIGHT = 200;
+    private const int CONTROL_SECTION_HEIGHT = 232;
 
     // Without the graphics card selector row.
-    private const int CONTROL_SECTION_COMPACT_HEIGHT = 162;
+    private const int CONTROL_SECTION_COMPACT_HEIGHT = 194;
     private const int CLOCK_INTERVAL_MS = 1000;
 
     // A 48-megapixel photo takes about 190 MB once decoded. A 4K screen never shows more than this many pixels per side.
@@ -84,10 +84,7 @@ internal sealed class MainForm : Form
     private readonly Button _cpuOnlyButton = Ui.Button();
     private readonly Button _memoryTestButton = Ui.Button();
     private readonly Button _diskTestButton = Ui.Button();
-    private readonly Button _diskHealthButton = Ui.Button();
-    private readonly Button _cpuInfoButton = Ui.Button();
-    private readonly Button _speakerTestButton = Ui.Button();
-    private readonly Button _micTestButton = Ui.Button();
+    private readonly Button _peripheralTestButton = Ui.Button();
     private readonly Button _advancedButton = Ui.Button();
 
     private readonly Label _overallLabel = Ui.Label(isBold: true);
@@ -265,28 +262,16 @@ internal sealed class MainForm : Form
 
     private TableLayoutPanel BuildRootPanel()
     {
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Padding = new Padding(Ui.SPACING * 2) };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(Ui.SPACING * 2) };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.Controls.Add(BuildToolbar(), 0, 0);
-        root.Controls.Add(BuildNotice(), 0, 1);
-        root.Controls.Add(BuildBody(), 0, 2);
-        root.Controls.Add(BuildFooter(), 0, 3);
+        root.Controls.Add(BuildNotice(), 0, 0);
+        root.Controls.Add(BuildBody(), 0, 1);
+        root.Controls.Add(BuildFooter(), 0, 2);
         _rootPanel = root;
         return root;
-    }
-
-    private FlowLayoutPanel BuildToolbar()
-    {
-        var bar = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Dock = DockStyle.Fill, WrapContents = false, Margin = new Padding(0, 0, 0, Ui.SPACING) };
-        _advancedButton.Text = _t["ui.advancedInfo"];
-        _advancedButton.MinimumSize = new Size(0, Ui.BUTTON_MIN_HEIGHT);
-        _advancedButton.Click += (_, _) => ShowAdvancedInfo();
-        bar.Controls.Add(_advancedButton);
-        return bar;
     }
 
     private TableLayoutPanel BuildFooter()
@@ -316,10 +301,10 @@ internal sealed class MainForm : Form
     {
         var viewSwitch = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = new Padding(0, 0, 0, Ui.SPACING) };
         viewSwitch.Controls.AddRange([_viewFullButton, _viewModelsButton]);
-        _hardwareGroup = Ui.Section(viewSwitch, _hardwareList);
+        _hardwareGroup = Ui.Section(viewSwitch, BuildHardwareContent());
 
         _phaseLabel.Margin = new Padding(0, 0, 0, Ui.SPACING / 2);
-        _monitorGroup = Ui.Section(_phaseLabel, BuildMonitorPanel());
+        _monitorGroup = Ui.Section(null, BuildMonitorPanel());
         _controlGroup = Ui.Section(null, BuildControlPanel());
         _detailsButton.Margin = new Padding(0, 0, 0, Ui.SPACING / 2);
         _resultGroup = Ui.Section(null, BuildResultPanel());
@@ -344,15 +329,44 @@ internal sealed class MainForm : Form
         return body;
     }
 
+    /// <summary>The hardware list fills the left side; the third information level stays at its bottom.</summary>
+    private TableLayoutPanel BuildHardwareContent()
+    {
+        _advancedButton.Text = _t["ui.advancedInfo"];
+        _advancedButton.MinimumSize = new Size(0, Ui.BUTTON_MIN_HEIGHT);
+        _advancedButton.Margin = new Padding(0);
+        _advancedButton.Click += (_, _) => ShowAdvancedInfo();
+
+        var advancedRow = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            Margin = new Padding(0, Ui.SPACING, 0, 0),
+        };
+        advancedRow.Controls.Add(_advancedButton);
+
+        var content = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Margin = new Padding(0) };
+        content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        _hardwareList.Dock = DockStyle.Fill;
+        _hardwareList.Margin = new Padding(0);
+        content.Controls.Add(_hardwareList, 0, 0);
+        content.Controls.Add(advancedRow, 0, 1);
+        return content;
+    }
+
     private TableLayoutPanel BuildMonitorPanel()
     {
-        var panel = new TableLayoutPanel { ColumnCount = 4, RowCount = 5, Margin = new Padding(0) };
+        var panel = new TableLayoutPanel { ColumnCount = 4, RowCount = 4, Margin = new Padding(0) };
         for (var column = 0; column < panel.ColumnCount; column++)
         {
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
         }
 
-        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         for (var row = 0; row < 3; row++)
         {
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(METRIC_ROW_HEIGHT)));
@@ -360,9 +374,6 @@ internal sealed class MainForm : Form
 
         // The fan row appears only when at least one fan can be read.
         panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));
-        _progressBar.Height = LogicalToDeviceUnits(Ui.SPACING);
-        panel.Controls.Add(_progressBar, 0, 0);
-        panel.SetColumnSpan(_progressBar, 4);
 
         MetricTile[][] rows =
         [
@@ -375,7 +386,7 @@ internal sealed class MainForm : Form
         {
             for (var column = 0; column < rows[row].Length; column++)
             {
-                panel.Controls.Add(rows[row][column], column, row + 1);
+                panel.Controls.Add(rows[row][column], column, row);
             }
         }
 
@@ -400,15 +411,55 @@ internal sealed class MainForm : Form
         // Windows draws this as the window's default button, without Enter being able to start a test.
         _startButton.NotifyDefault(true);
 
-        var panel = new TableLayoutPanel { ColumnCount = 1, RowCount = 3, Margin = new Padding(0) };
+        _progressBar.Dock = DockStyle.Fill;
+        _progressBar.Margin = new Padding(0);
+        _progressBar.Height = LogicalToDeviceUnits(Ui.SPACING);
+        var statusPanel = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Top, ColumnCount = 1, RowCount = 2, Margin = new Padding(0) };
+        statusPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        statusPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        statusPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(Ui.SPACING)));
+        statusPanel.Controls.Add(_phaseLabel, 0, 0);
+        statusPanel.Controls.Add(_progressBar, 0, 1);
+
+        var panel = new TableLayoutPanel { ColumnCount = 1, RowCount = 4, Margin = new Padding(0) };
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         panel.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(PRIMARY_BUTTON_HEIGHT + (Ui.SPACING * 2))));
         panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        panel.Controls.Add(_targetPanel, 0, 0);
-        panel.Controls.Add(_startButton, 0, 1);
-        panel.Controls.Add(Ui.ButtonGrid(4, _gpuOnlyButton, _cpuOnlyButton, _memoryTestButton, _diskTestButton, _diskHealthButton, _speakerTestButton, _micTestButton, _cpuInfoButton), 0, 2);
+        panel.Controls.Add(statusPanel, 0, 0);
+        panel.Controls.Add(_targetPanel, 0, 1);
+        panel.Controls.Add(_startButton, 0, 2);
+        panel.Controls.Add(BuildTestButtons(), 0, 3);
         return panel;
+    }
+
+    /// <summary>Row 1: GPU, CPU, empty. Row 2: memory, disk, peripherals. Two rows only.</summary>
+    private TableLayoutPanel BuildTestButtons()
+    {
+        var grid = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Top, ColumnCount = 3, RowCount = 2, Margin = new Padding(0) };
+        for (var column = 0; column < grid.ColumnCount; column++)
+        {
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / grid.ColumnCount));
+        }
+
+        grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        Button[] buttons = [_gpuOnlyButton, _cpuOnlyButton, _memoryTestButton, _diskTestButton, _peripheralTestButton];
+        foreach (var button in buttons)
+        {
+            button.AutoSize = false;
+            button.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            button.MinimumSize = new Size(0, Ui.BUTTON_MIN_HEIGHT);
+        }
+
+        grid.Controls.Add(_gpuOnlyButton, 0, 0);
+        grid.Controls.Add(_cpuOnlyButton, 1, 0);
+        grid.Controls.Add(_memoryTestButton, 0, 1);
+        grid.Controls.Add(_diskTestButton, 1, 1);
+        grid.Controls.Add(_peripheralTestButton, 2, 1);
+        return grid;
     }
 
     private TableLayoutPanel BuildResultPanel()
@@ -451,12 +502,9 @@ internal sealed class MainForm : Form
         _gpuOnlyButton.Click += (_, _) => _ = RunTestAsync(runIdle: false, runGpu: true, runCpu: false);
         _cpuOnlyButton.Click += (_, _) => _ = RunTestAsync(runIdle: false, runGpu: false, runCpu: true);
         _detailsButton.Click += (_, _) => ShowDetails();
-        _diskHealthButton.Click += (_, _) => ShowDiskHealth();
-        _cpuInfoButton.Click += (_, _) => ShowCpuInfo();
         _memoryTestButton.Click += (_, _) => _ = RunMemoryTestAsync();
         _diskTestButton.Click += (_, _) => _ = RunDiskTestAsync();
-        _speakerTestButton.Click += (_, _) => _ = RunSpeakerTestAsync();
-        _micTestButton.Click += (_, _) => _ = RunMicrophoneTestAsync();
+        _peripheralTestButton.Click += (_, _) => ShowPeripheralTests();
         Resize += (_, _) =>
         {
             FitMessages();
@@ -504,16 +552,22 @@ internal sealed class MainForm : Form
         var menu = new NativeMenu();
         var file = menu.AddSubmenu(_t["ui.menuFile"]);
         NativeMenu.AddItem(file, MenuCommand.Report, $"{_t["ui.report"]}\tF7");
-        NativeMenu.AddItem(file, MenuCommand.Copy, $"{_t["ui.copy"]}\tCtrl+C");
         NativeMenu.AddSeparator(file);
         NativeMenu.AddItem(file, MenuCommand.OpenReport, _t["ui.openReport"]);
         NativeMenu.AddItem(file, MenuCommand.OpenFolder, _t["ui.openFolder"]);
         NativeMenu.AddSeparator(file);
-        NativeMenu.AddItem(file, MenuCommand.Reload, _t["ui.reload"]);
-        NativeMenu.AddItem(file, MenuCommand.RestartToFirmware, _t["ui.restartToFirmware"]);
-        NativeMenu.AddItem(file, MenuCommand.Settings, _t["ui.settings"]);
-        NativeMenu.AddSeparator(file);
         NativeMenu.AddItem(file, MenuCommand.Exit, _t["ui.exit"]);
+
+        var tools = menu.AddSubmenu(_t["ui.menuTools"]);
+        NativeMenu.AddItem(tools, MenuCommand.Reload, _t["ui.reload"]);
+        NativeMenu.AddItem(tools, MenuCommand.RestartToFirmware, _t["ui.restartToFirmware"]);
+        NativeMenu.AddItem(tools, MenuCommand.Copy, $"{_t["ui.copy"]}\tCtrl+C");
+        NativeMenu.AddSeparator(tools);
+        NativeMenu.AddItem(tools, MenuCommand.AdvancedInfo, _t["ui.advancedInfo"]);
+        NativeMenu.AddItem(tools, MenuCommand.Maintenance, _t["ui.maintenance"]);
+
+        var settings = menu.AddSubmenu(_t["ui.menuSettings"]);
+        NativeMenu.AddItem(settings, MenuCommand.Settings, _t["ui.settings"]);
 
         var view = menu.AddSubmenu(_t["ui.menuView"]);
         NativeMenu.AddItem(view, MenuCommand.ShowHardware, _t["ui.showHardware"]);
@@ -582,6 +636,12 @@ internal sealed class MainForm : Form
                 break;
             case MenuCommand.Reload:
                 _ = ReloadHardwareAsync();
+                break;
+            case MenuCommand.AdvancedInfo:
+                ShowAdvancedInfo();
+                break;
+            case MenuCommand.Maintenance:
+                ShowMaintenance();
                 break;
             case MenuCommand.Exit:
                 Close();
@@ -864,12 +924,9 @@ internal sealed class MainForm : Form
         _gpuOnlyButton.Text = _t["ui.gpuOnly"];
         _cpuOnlyButton.Text = _t["ui.cpuOnly"];
         _detailsButton.Text = _t["ui.details"];
-        _diskHealthButton.Text = _t["ui.diskHealth"];
-        _cpuInfoButton.Text = _t["ui.cpuInfo"];
         _memoryTestButton.Text = _t["ui.memoryTest"];
         _diskTestButton.Text = _t["ui.diskTest"];
-        _speakerTestButton.Text = _t["ui.speakerTest"];
-        _micTestButton.Text = _t["ui.micTest"];
+        _peripheralTestButton.Text = _t["ui.peripheralTest"];
         _advancedButton.Text = _t["ui.advancedInfo"];
         StyleViewSwitch();
 
@@ -958,26 +1015,6 @@ internal sealed class MainForm : Form
     private static void ShowUsage(MetricTile tile, string text, double? fraction) =>
         tile.Show(text, fraction, MetricLevels.ForUsage(fraction));
 
-    private void ShowDiskHealth()
-    {
-        if (_hardware?.DiskHealth is not { } disks)
-        {
-            return;
-        }
-
-        using var form = new DiskHealthForm(_t, disks, Font);
-        form.ShowDialog(this);
-    }
-
-    private void ShowCpuInfo()
-    {
-        if (_hardware is { } hardware)
-        {
-            using var form = new CpuInfoForm(_t, hardware, Font);
-            form.ShowDialog(this);
-        }
-    }
-
     /// <summary>
     /// The window is modeless so monitoring stays visible. It is also allowed while a test runs: the snapshot then
     /// contains the last live sensor sample, and Refresh only rebuilds from that same snapshot source.
@@ -1005,6 +1042,25 @@ internal sealed class MainForm : Form
         _hardware is { } hardware
             ? AdvancedInfoBuilder.Build(_t, hardware, _sensors, DateTimeOffset.Now)
             : new AdvancedSnapshot(DateTimeOffset.Now, CheckReport.CurrentToolVersion, []);
+
+    private void ShowPeripheralTests()
+    {
+        if (_hardware is not { } hardware)
+        {
+            return;
+        }
+
+        using var form = new PeripheralTestForm(_t, hardware, _audioCheck, Font);
+        form.ShowDialog(this);
+        _audioCheck = form.AudioResult;
+        RenderResults();
+    }
+
+    private void ShowMaintenance()
+    {
+        using var form = new MaintenanceForm(_t, Font);
+        form.ShowDialog(this);
+    }
 
     private void FillTargetBox()
     {
@@ -1181,9 +1237,11 @@ internal sealed class MainForm : Form
         }
 
         var shown = tiles.Where(item => item.Speed is not null).ToList();
+        var reference = _settings.FanReferenceRpm;
         foreach (var (tile, speed) in shown)
         {
-            ShowPlain(tile, Format(speed, "0", "RPM"));
+            var fraction = reference > 0 && speed is { } rpm ? rpm / reference : (double?)null;
+            tile.Show(Format(speed, "0", "RPM"), fraction, MetricLevel.Normal);
         }
 
         // Which fans can be read rarely changes, so the row is only rearranged when it does.
@@ -1293,32 +1351,6 @@ internal sealed class MainForm : Form
         }
 
         StartLiveMonitor();
-    }
-
-    private async Task RunSpeakerTestAsync()
-    {
-        await RunToolAsync(_t["ui.speakerPlaying"], async (_, _) =>
-        {
-            await Task.Run(AudioCheck.PlayTone);
-            var heard = MessageBox.Show(this, _t["ui.speakerConfirm"], _t["ui.speakerTest"], MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
-            _audioCheck = _audioCheck with { SpeakerHeard = heard };
-        });
-    }
-
-    private async Task RunMicrophoneTestAsync()
-    {
-        if (_hardware?.Peripherals?.Any(item => item.Kind == PeripheralKind.Microphone) != true)
-        {
-            SetStatus(_t["ui.noMicrophone"], isAlert: true);
-            return;
-        }
-
-        await RunToolAsync(_t["ui.micRecording"], async (_, _) =>
-        {
-            await Task.Run(() => AudioCheck.RecordAndPlayBack(() => PostToUi(() => _phaseLabel.Text = _t["ui.micPlaying"])));
-            var heard = MessageBox.Show(this, _t["ui.micConfirm"], _t["ui.micTest"], MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
-            _audioCheck = _audioCheck with { MicrophoneHeard = heard };
-        });
     }
 
     private async Task RunMemoryTestAsync()
@@ -1439,12 +1471,9 @@ internal sealed class MainForm : Form
         _cpuOnlyButton.Enabled = isReady && !isRunning;
         _targetBox.Enabled = !isRunning;
         _detailsButton.Enabled = _lastRun is not null;
-        _diskHealthButton.Enabled = isReady;
-        _cpuInfoButton.Enabled = isReady;
         _memoryTestButton.Enabled = isReady && !isRunning;
         _diskTestButton.Enabled = isReady && !isRunning;
-        _speakerTestButton.Enabled = isReady && !isRunning;
-        _micTestButton.Enabled = isReady && !isRunning;
+        _peripheralTestButton.Enabled = isReady && !isRunning;
         _advancedButton.Enabled = isReady;
         _elevateButton.Enabled = !isRunning;
         if (_menu is { } menu)
@@ -1455,6 +1484,8 @@ internal sealed class MainForm : Form
             menu.SetEnabled(MenuCommand.Settings, !isRunning);
             menu.SetEnabled(MenuCommand.BackgroundAdjust, _backgroundSource is not null);
             menu.SetEnabled(MenuCommand.Reload, isReady && !isRunning);
+            menu.SetEnabled(MenuCommand.AdvancedInfo, isReady);
+            menu.SetEnabled(MenuCommand.Maintenance, true);
             menu.SetChecked(MenuCommand.ShowHardware, !_settings.IsHardwarePanelHidden);
             menu.SetChecked(MenuCommand.ShowTests, !_settings.IsTestPanelHidden);
             menu.SetChecked(MenuCommand.AlwaysOnTop, _settings.IsAlwaysOnTop);

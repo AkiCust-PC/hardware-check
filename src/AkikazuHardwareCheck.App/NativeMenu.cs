@@ -16,6 +16,8 @@ internal enum MenuCommand
     BackgroundReset,
     Reload,
     Exit,
+    AdvancedInfo,
+    Maintenance,
     ShowHardware,
     ShowTests,
     AlwaysOnTop,

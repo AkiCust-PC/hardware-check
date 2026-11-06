@@ -256,7 +256,7 @@ public class ReportingTests
         Assert.Contains("微码 0x11A", full.Single(line => line.Label == t["summary.processor"]).Value);
         Assert.DoesNotContain(full, line => line.Label == t["summary.whea"] || line.Label == t["summary.microcode"] || line.Label == "TPM" || line.Label == t["summary.lastBoot"]);
         Assert.Equal("已开启 TPM 2.0", full.Single(line => line.Label == t["summary.secureBoot"]).Value);
-        Assert.Contains("5", HardwareSummary.HistoryLines(t, hardware).Single(line => line.Label == t["summary.lastBoot"]).Value);
+        Assert.Contains("5", HardwareSummary.HistoryLines(t, hardware).Single(line => line.Label == t["summary.systemRecord"]).Value);
         Assert.EndsWith("已激活", full.Single(line => line.Label == t["summary.system"]).Value);
 
         var models = HardwareSummary.Lines(t, hardware, isFull: false);
@@ -277,19 +277,16 @@ public class ReportingTests
 
         Assert.EndsWith("BIOS 1.0 2026-01-01", HardwareSummary.Lines(t, hardware).Single(line => line.Label == t["section.motherboard"]).Value);
         Assert.DoesNotContain("BIOS", HardwareSummary.Lines(t, hardware, isFull: false).Single(line => line.Label == t["section.motherboard"]).Value);
-        Assert.Equal("2026-05-12", HardwareSummary.HistoryLines(t, hardware).Single(line => line.Label == t["summary.installDate"]).Value);
+        Assert.Contains("2026-05-12", HardwareSummary.HistoryLines(t, hardware).Single(line => line.Label == t["summary.systemRecord"]).Value);
     }
 
     [Fact]
-    public void LanguageRowHasNoCodePage()
+    public void LanguageEnvironmentIncludesCodePage()
     {
         var t = Translator.Load(AppLanguage.ENGLISH);
 
-        foreach (var locale in new[] { new LocaleInfo("zh-CN", "zh-CN", "zh-CN", 936), new LocaleInfo("zh-CN", "ja-JP", "ja-JP", 932) })
-        {
-            var row = HardwareSummary.Lines(t, Hardware() with { Locale = locale }).Single(line => line.Label == t["summary.language"]).Value;
-            Assert.DoesNotContain("93", row);
-        }
+        var row = HardwareSummary.Lines(t, Hardware() with { Locale = new LocaleInfo("zh-CN", "ja-JP", "ja-JP", 932) }).Single(line => line.Label == t["summary.languageEnvironment"]).Value;
+        Assert.Contains("Shift-JIS", row);
     }
 
     [Fact]
@@ -361,9 +358,9 @@ public class ReportingTests
 
         var full = HardwareSummary.Lines(t, hardware);
 
-        Assert.Contains(CultureInfo.GetCultureInfo("ja-JP").NativeName, full.Single(line => line.Label == t["summary.language"]).Value);
+        Assert.Contains(CultureInfo.GetCultureInfo("ja-JP").NativeName, full.Single(line => line.Label == t["summary.languageEnvironment"]).Value);
         var same = HardwareSummary.Lines(t, hardware with { Locale = new LocaleInfo("ja-JP", "ja-JP", "ja-JP", 932) });
-        Assert.DoesNotContain("Format", same.Single(line => line.Label == t["summary.language"]).Value);
+        Assert.DoesNotContain("Format", same.Single(line => line.Label == t["summary.languageEnvironment"]).Value);
         Assert.Contains(full, line => line.Label == t["summary.time"]);
         Assert.DoesNotContain(HardwareSummary.Lines(t, hardware, isFull: false), line => line.Label == t["summary.time"]);
 
@@ -474,10 +471,11 @@ public class ReportingTests
         var path = Path.Combine(AppContext.BaseDirectory, $"test-output-{Guid.NewGuid():N}", "settings.json");
         try
         {
-            Assert.Null(new AppSettings(Language: AppLanguage.JAPANESE, CpuProtectionCelsius: 90).TrySave(path));
+            Assert.Null(new AppSettings(Language: AppLanguage.JAPANESE, CpuProtectionCelsius: 90, FanReferenceRpm: 2400).TrySave(path));
             var loaded = AppSettings.Load(path);
             Assert.Equal(AppLanguage.JAPANESE, loaded.Language);
             Assert.Equal(90, loaded.ToProfile().CpuProtectionCelsius);
+            Assert.Equal(2400, loaded.FanReferenceRpm);
 
             File.WriteAllText(path, "{ not json");
             Assert.Null(AppSettings.Load(path).Language);
