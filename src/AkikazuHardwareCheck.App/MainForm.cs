@@ -731,6 +731,7 @@ internal sealed class MainForm : Form
 
         var view = menu.AddSubmenu(_t["ui.menuView"]);
         NativeMenu.AddItem(view, MenuCommand.ShowHardware, _t["ui.showHardware"]);
+        NativeMenu.AddItem(view, MenuCommand.ShowMonitor, _t["ui.showMonitor"]);
         NativeMenu.AddItem(view, MenuCommand.ShowTests, _t["ui.showTests"]);
         NativeMenu.AddItem(view, MenuCommand.AlwaysOnTop, _t["ui.alwaysOnTop"]);
         NativeMenu.AddItem(view, MenuCommand.Floating, _t["tray.floating"]);
@@ -811,12 +812,18 @@ internal sealed class MainForm : Form
                 ExitApplication();
                 break;
             case MenuCommand.ShowHardware:
-                // One side always stays, so the window is never left empty.
-                SaveSettings(_settings with { IsHardwarePanelHidden = !_settings.IsHardwarePanelHidden, IsTestPanelHidden = !_settings.IsHardwarePanelHidden && _settings.IsTestPanelHidden ? false : _settings.IsTestPanelHidden });
+                SaveSettings(_settings with { IsHardwarePanelHidden = !_settings.IsHardwarePanelHidden });
+                EnsureSomePanelVisible();
+                ApplyPanels();
+                break;
+            case MenuCommand.ShowMonitor:
+                SaveSettings(_settings with { IsMonitorPanelHidden = !_settings.IsMonitorPanelHidden });
+                EnsureSomePanelVisible();
                 ApplyPanels();
                 break;
             case MenuCommand.ShowTests:
-                SaveSettings(_settings with { IsTestPanelHidden = !_settings.IsTestPanelHidden, IsHardwarePanelHidden = !_settings.IsTestPanelHidden && _settings.IsHardwarePanelHidden ? false : _settings.IsHardwarePanelHidden });
+                SaveSettings(_settings with { IsTestPanelHidden = !_settings.IsTestPanelHidden });
+                EnsureSomePanelVisible();
                 ApplyPanels();
                 break;
             case MenuCommand.AlwaysOnTop:
@@ -885,11 +892,26 @@ internal sealed class MainForm : Form
         }
 
         var showsHardware = !_settings.IsHardwarePanelHidden;
+        var showsMonitor = !_settings.IsMonitorPanelHidden;
         var showsTests = !_settings.IsTestPanelHidden;
         hardware.Visible = showsHardware;
-        _rightPanel.Visible = showsTests;
+        _monitorGroup!.Visible = showsMonitor;
+        _controlGroup!.Visible = showsTests;
+        _resultGroup!.Visible = showsTests;
+        _rightPanel.Visible = showsMonitor || showsTests;
+        _rightPanel.RowStyles[0].Height = (showsMonitor ? LogicalToDeviceUnits(MONITOR_SECTION_HEIGHT) : 0);
+        _rightPanel.RowStyles[2].SizeType = showsTests ? SizeType.Percent : SizeType.Absolute;
+        _rightPanel.RowStyles[2].Height = showsTests ? 100 : 0;
         ApplyBodyWidths();
         UpdateCommandStates();
+    }
+
+    private void EnsureSomePanelVisible()
+    {
+        if (_settings.IsHardwarePanelHidden && _settings.IsMonitorPanelHidden && _settings.IsTestPanelHidden)
+        {
+            SaveSettings(_settings with { IsHardwarePanelHidden = false });
+        }
     }
 
     /// <summary>
@@ -1348,7 +1370,7 @@ internal sealed class MainForm : Form
         // One card leaves nothing to choose, so the row appears only with two or more.
         var hasChoice = candidates.Count > 1;
         _targetPanel.Visible = hasChoice;
-        _rightPanel.RowStyles[1].Height = LogicalToDeviceUnits(hasChoice ? CONTROL_SECTION_HEIGHT : CONTROL_SECTION_COMPACT_HEIGHT);
+        _rightPanel.RowStyles[1].Height = _settings.IsTestPanelHidden ? 0 : LogicalToDeviceUnits(hasChoice ? CONTROL_SECTION_HEIGHT : CONTROL_SECTION_COMPACT_HEIGHT);
         for (var index = 0; index < candidates.Count; index++)
         {
             // Numbered because two identical cards would otherwise read the same.
@@ -1772,6 +1794,7 @@ internal sealed class MainForm : Form
             menu.SetEnabled(MenuCommand.AdvancedInfo, isReady);
             menu.SetEnabled(MenuCommand.Maintenance, true);
             menu.SetChecked(MenuCommand.ShowHardware, !_settings.IsHardwarePanelHidden);
+            menu.SetChecked(MenuCommand.ShowMonitor, !_settings.IsMonitorPanelHidden);
             menu.SetChecked(MenuCommand.ShowTests, !_settings.IsTestPanelHidden);
             menu.SetChecked(MenuCommand.AlwaysOnTop, _settings.IsAlwaysOnTop);
             menu.SetEnabled(MenuCommand.RestartToFirmware, !isRunning);

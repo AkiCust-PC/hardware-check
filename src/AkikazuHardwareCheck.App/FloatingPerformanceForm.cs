@@ -32,7 +32,7 @@ internal sealed class FloatingPerformanceForm : Form
     private Point _dragStart;
     private bool _dragging;
     private bool _dragMoved;
-    private bool _snapped = true;
+    private bool _snapped;
     private bool _infoVisible = true;
     private bool _cleaning;
     private bool _clickPending;
@@ -74,7 +74,7 @@ internal sealed class FloatingPerformanceForm : Form
         Shown += (_, _) =>
         {
             ApplyMode();
-            SnapToNearestEdge(force: true);
+            PositionInitialBall();
             RefreshSample();
             _sampleTimer.Start();
             _animationTimer.Start();
@@ -185,6 +185,14 @@ internal sealed class FloatingPerformanceForm : Form
         var previous = Region;
         Region = new Region(path);
         previous?.Dispose();
+    }
+
+    private void PositionInitialBall()
+    {
+        // Start on the primary work area; Screen.FromControl can resolve to an off-screen secondary monitor at startup.
+        var screen = Screen.PrimaryScreen?.WorkingArea ?? SystemInformation.WorkingArea;
+        Left = screen.Right - Width - DpiScale(48);
+        Top = screen.Top + DpiScale(120);
     }
 
     private void DrawBall(Graphics graphics)

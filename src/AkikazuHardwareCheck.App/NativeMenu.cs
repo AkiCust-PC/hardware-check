@@ -19,6 +19,7 @@ internal enum MenuCommand
     AdvancedInfo,
     Maintenance,
     ShowHardware,
+    ShowMonitor,
     ShowTests,
     AlwaysOnTop,
     Floating,
