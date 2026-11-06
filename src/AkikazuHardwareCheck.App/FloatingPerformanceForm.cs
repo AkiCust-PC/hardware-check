@@ -14,9 +14,19 @@ namespace AkikazuHardwareCheck.App;
 /// </summary>
 internal sealed class FloatingPerformanceForm : Form
 {
+    public enum DockEdge
+    {
+        None = 0,
+        Left = 1,
+        Right = 2,
+        Top = 3,
+        Bottom = 4,
+    }
+
     private const int BALL_SIZE = 96;
     private const int STRIP_WIDTH = 13;
     private const int STRIP_HEIGHT = 150;
+    private const int HORIZONTAL_STRIP_WIDTH = 150;
     private const int SNAP_DISTANCE = 28;
     private const int DRAG_THRESHOLD = 4;
     private const int ANIMATION_INTERVAL_MS = 50;
@@ -35,7 +45,7 @@ internal sealed class FloatingPerformanceForm : Form
     private readonly int? _initialTop;
     private bool _dragging;
     private bool _dragMoved;
-    private bool _snapped;
+    private DockEdge _edge;
     private bool _infoVisible = true;
     private bool _cleaning;
     private bool _clickPending;
@@ -50,14 +60,14 @@ internal sealed class FloatingPerformanceForm : Form
         Font font,
         int? initialLeft = null,
         int? initialTop = null,
-        bool snapped = false,
+        DockEdge edge = DockEdge.None,
         bool infoVisible = true)
     {
         _t = t;
         _readSnapshot = readSnapshot;
         _initialLeft = initialLeft;
         _initialTop = initialTop;
-        _snapped = snapped;
+        _edge = edge;
         _infoVisible = infoVisible;
         Font = font;
         Icon = Ui.AppIcon;
@@ -93,9 +103,9 @@ internal sealed class FloatingPerformanceForm : Form
                 Location = new Point(left, top);
                 ClampToWorkingArea();
             }
-            else if (_snapped)
+            else if (_edge != DockEdge.None)
             {
-                SnapToNearestEdge(force: true);
+                DockTo(_edge);
             }
             else
             {
@@ -141,8 +151,8 @@ internal sealed class FloatingPerformanceForm : Form
 
     private void BuildMenu()
     {
-        AddMenuItem(_t["floating.dockLeft"], () => DockTo(left: true));
-        AddMenuItem(_t["floating.dockRight"], () => DockTo(left: false));
+        AddMenuItem(_t["floating.dockLeft"], () => DockTo(DockEdge.Left));
+        AddMenuItem(_t["floating.dockRight"], () => DockTo(DockEdge.Right));
         AddMenuItem(_t["floating.undock"], Undock);
         _menu.Items.Add(new ToolStripSeparator());
         AddMenuItem(_t["floating.hide"], Hide);
@@ -168,13 +178,16 @@ internal sealed class FloatingPerformanceForm : Form
 
     private void ApplyMode()
     {
-        var size = _snapped
-            ? new Size(DpiScale(STRIP_WIDTH), DpiScale(STRIP_HEIGHT))
-            : new Size(DpiScale(BALL_SIZE), DpiScale(BALL_SIZE));
-        ClientSize = size;
-        if (_snapped)
+        var size = _edge switch
         {
-            SetRoundedRegion(size, DpiScale(8));
+            DockEdge.Left or DockEdge.Right => new Size(DpiScale(STRIP_WIDTH), DpiScale(STRIP_HEIGHT)),
+            DockEdge.Top or DockEdge.Bottom => new Size(DpiScale(HORIZONTAL_STRIP_WIDTH), DpiScale(STRIP_WIDTH)),
+            _ => new Size(DpiScale(BALL_SIZE), DpiScale(BALL_SIZE)),
+        };
+        ClientSize = size;
+        if (_edge != DockEdge.None)
+        {
+            SetRoundedRegion(size, DpiScale(6));
         }
         else
         {
@@ -214,7 +227,7 @@ internal sealed class FloatingPerformanceForm : Form
         graphics.SmoothingMode = SmoothingMode.AntiAlias;
         graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
         graphics.Clear(Color.Transparent);
-        if (_snapped)
+        if (_edge != DockEdge.None)
         {
             DrawStrip(graphics);
         }
@@ -226,7 +239,7 @@ internal sealed class FloatingPerformanceForm : Form
         UpdateLayered(bitmap);
     }
 
-    public (int Left, int Top, bool Snapped, bool InfoVisible) CaptureState() => (Left, Top, _snapped, _infoVisible);
+    public (int Left, int Top, int Edge, bool InfoVisible) CaptureState() => (Left, Top, (int)_edge, _infoVisible);
 
     private void ClampToWorkingArea()
     {
@@ -313,9 +326,49 @@ internal sealed class FloatingPerformanceForm : Form
     private void DrawStrip(Graphics graphics)
     {
         var bounds = new Rectangle(1, 1, Math.Max(1, ClientSize.Width - 3), Math.Max(1, ClientSize.Height - 3));
-        using var path = RoundedRect(bounds, DpiScale(8));
+        using var path = RoundedRect(bounds, DpiScale(6));
         DrawGlass(graphics, path, bounds);
-        DrawLiquid(graphics, path, bounds);
+        if (_edge is DockEdge.Top or DockEdge.Bottom)
+        {
+            DrawHorizontalLiquid(graphics, path, bounds);
+        }
+        else
+        {
+            DrawLiquid(graphics, path, bounds);
+        }
+    }
+
+    private void DrawHorizontalLiquid(Graphics graphics, GraphicsPath container, Rectangle bounds)
+    {
+        var fraction = Math.Clamp((_sample?.MemoryLoad ?? 0) / 100d, 0d, 1d);
+        if (fraction <= 0)
+        {
+            return;
+        }
+
+        var temperature = _sample?.CpuTemperature;
+        var heat = temperature is { } celsius ? Math.Clamp((celsius - 40d) / 45d, 0d, 1d) : 0.35d;
+        var cool = Color.FromArgb(210, 45, 125, 225);
+        var hot = Color.FromArgb(225, 220, 55, 45);
+        var right = bounds.Left + (int)Math.Round(bounds.Width * fraction);
+        var state = graphics.Save();
+        graphics.SetClip(container);
+        using (var liquid = new LinearGradientBrush(bounds, Blend(cool, hot, heat), Blend(cool, hot, heat), LinearGradientMode.Horizontal))
+        {
+            graphics.FillRectangle(liquid, bounds.Left, bounds.Top, Math.Max(1, right - bounds.Left), bounds.Height);
+        }
+
+        var bubbleCount = 2 + (int)Math.Round(heat * 8);
+        for (var index = 0; index < bubbleCount; index++)
+        {
+            var bubbleX = bounds.Left + (int)(Math.Max(1, right - bounds.Left) * (0.12 + (0.76 * ((index * 0.43) % 1))));
+            var bubbleY = bounds.Top + (int)(bounds.Height * (0.2 + (0.6 * ((index * 0.61) % 1))));
+            var radius = Math.Max(1, DpiScale(index % 2 == 0 ? 2 : 1));
+            using var bubble = new SolidBrush(Color.FromArgb(105, 255, 255, 255));
+            graphics.FillEllipse(bubble, bubbleX, bubbleY, radius, radius);
+        }
+
+        graphics.Restore(state);
     }
 
     private void DrawLiquid(Graphics graphics, GraphicsPath container, Rectangle bounds)
@@ -479,42 +532,58 @@ internal sealed class FloatingPerformanceForm : Form
     {
         // Use the physical cursor against the physical work area; the window's Left/Right are DPI-scaled.
         var screen = Screen.FromPoint(Cursor.Position).WorkingArea;
-        var leftDistance = Math.Abs(Cursor.Position.X - screen.Left);
-        var rightDistance = Math.Abs(screen.Right - Cursor.Position.X);
-        var nearEdge = Math.Min(leftDistance, rightDistance) <= DpiScale(SNAP_DISTANCE);
-        _snapped = force || nearEdge;
-        ApplyMode();
-        if (!_snapped)
+        var distances = new[]
         {
+            (Edge: DockEdge.Left, Distance: Math.Abs(Cursor.Position.X - screen.Left)),
+            (Edge: DockEdge.Right, Distance: Math.Abs(screen.Right - Cursor.Position.X)),
+            (Edge: DockEdge.Top, Distance: Math.Abs(Cursor.Position.Y - screen.Top)),
+            (Edge: DockEdge.Bottom, Distance: Math.Abs(screen.Bottom - Cursor.Position.Y)),
+        };
+        var nearest = distances.OrderBy(item => item.Distance).First();
+        if (!force && nearest.Distance > DpiScale(SNAP_DISTANCE))
+        {
+            _edge = DockEdge.None;
+            ApplyMode();
             return;
         }
 
-        DockTo(rightDistance <= leftDistance);
+        DockTo(force && _edge != DockEdge.None ? _edge : nearest.Edge);
     }
 
-    private void DockTo(bool left)
+    private void DockTo(DockEdge edge)
     {
         var screen = Screen.FromPoint(Cursor.Position).WorkingArea;
-        _snapped = true;
+        _edge = edge;
         ApplyMode();
         if (GetWindowRect(Handle, out var rect))
         {
             var width = Math.Max(1, rect.Right - rect.Left);
             var height = Math.Max(1, rect.Bottom - rect.Top);
-            var x = left ? screen.Left : screen.Right - width;
-            var y = Math.Clamp(rect.Top, screen.Top, Math.Max(screen.Top, screen.Bottom - height));
+            var x = edge switch
+            {
+                DockEdge.Left => screen.Left,
+                DockEdge.Right => screen.Right - width,
+                _ => Math.Clamp(rect.Left, screen.Left, Math.Max(screen.Left, screen.Right - width)),
+            };
+            var y = edge switch
+            {
+                DockEdge.Top => screen.Top,
+                DockEdge.Bottom => screen.Bottom - height,
+                _ => Math.Clamp(rect.Top, screen.Top, Math.Max(screen.Top, screen.Bottom - height)),
+            };
             SetWindowPos(Handle, IntPtr.Zero, x, y, 0, 0, 0x0001 | 0x0004 | 0x0010);
             return;
         }
 
-        Left = left ? screen.Left : screen.Right - Width;
-        Top = Math.Clamp(Top, screen.Top, Math.Max(screen.Top, screen.Bottom - Height));
+        Left = edge == DockEdge.Left ? screen.Left : edge == DockEdge.Right ? screen.Right - Width : Left;
+        Top = edge == DockEdge.Top ? screen.Top : edge == DockEdge.Bottom ? screen.Bottom - Height : Top;
     }
 
     private void Undock()
     {
-        _snapped = false;
+        _edge = DockEdge.None;
         ApplyMode();
+        ClampToWorkingArea();
     }
 
     private async Task CleanMemoryAsync()

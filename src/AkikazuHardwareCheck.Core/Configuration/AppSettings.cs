@@ -30,6 +30,7 @@ namespace AkikazuHardwareCheck.Core.Configuration;
 /// <param name="FloatingLeft">Last floating-window left edge.</param>
 /// <param name="FloatingTop">Last floating-window top edge.</param>
 /// <param name="FloatingSnapped">Whether the floating window was docked to an edge.</param>
+/// <param name="FloatingEdge">Docked edge: 0 none, 1 left, 2 right, 3 top, 4 bottom.</param>
 /// <param name="FloatingInfoVisible">Whether the floating window showed its readings.</param>
 public sealed record AppSettings(
     string? Language = null,
@@ -58,6 +59,7 @@ public sealed record AppSettings(
     int? FloatingLeft = null,
     int? FloatingTop = null,
     bool FloatingSnapped = false,
+    int FloatingEdge = 0,
     bool FloatingInfoVisible = true,
     bool IsHardwarePanelHidden = false,
     bool IsMonitorPanelHidden = false,

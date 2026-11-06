@@ -1083,7 +1083,8 @@ internal sealed class MainForm : Form
             IsMaximized = WindowState == FormWindowState.Maximized,
             FloatingLeft = _floatingForm is { IsDisposed: false } ? floating.Left : _settings.FloatingLeft,
             FloatingTop = _floatingForm is { IsDisposed: false } ? floating.Top : _settings.FloatingTop,
-            FloatingSnapped = _floatingForm is { IsDisposed: false } ? floating.Snapped : _settings.FloatingSnapped,
+            FloatingEdge = _floatingForm is { IsDisposed: false } ? floating.Edge : _settings.FloatingEdge,
+            FloatingSnapped = _floatingForm is { IsDisposed: false } ? floating.Edge != 0 : _settings.FloatingSnapped,
             FloatingInfoVisible = _floatingForm is { IsDisposed: false } ? floating.InfoVisible : _settings.FloatingInfoVisible,
         });
     }
@@ -1469,13 +1470,19 @@ internal sealed class MainForm : Form
             return;
         }
 
+        var edge = (FloatingPerformanceForm.DockEdge)_settings.FloatingEdge;
+        if (edge == FloatingPerformanceForm.DockEdge.None && _settings.FloatingSnapped)
+        {
+            edge = FloatingPerformanceForm.DockEdge.Left;
+        }
+
         var form = new FloatingPerformanceForm(
             _t,
             CurrentLiveSnapshot,
             Font,
             _settings.FloatingLeft,
             _settings.FloatingTop,
-            _settings.FloatingSnapped,
+            edge,
             _settings.FloatingInfoVisible);
         form.FormClosed += (_, _) => _floatingForm = null;
         _floatingForm = form;
