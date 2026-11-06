@@ -779,6 +779,7 @@ internal sealed class MainForm : Form
         NativeMenu.AddItem(tools, MenuCommand.AdvancedInfo, _t["ui.advancedInfo"]);
         NativeMenu.AddItem(tools, MenuCommand.Maintenance, _t["ui.maintenance"]);
         NativeMenu.AddItem(tools, MenuCommand.NetworkSpeedTest, _t["networkTest.title"]);
+        NativeMenu.AddItem(tools, MenuCommand.DisplayInfo, _t["displayInfo.title"]);
         var keyboardLayouts = menu.AddSubmenu(_t["ui.keyboardLayout"]);
         var layouts = InputLanguage.InstalledInputLanguages.Cast<InputLanguage>().ToArray();
         for (var index = 0; index < layouts.Length; index++)
@@ -882,6 +883,13 @@ internal sealed class MainForm : Form
                 break;
             case MenuCommand.NetworkSpeedTest:
                 using (var form = new NetworkSpeedTestForm(_t, Font))
+                {
+                    form.ShowDialog(this);
+                }
+
+                break;
+            case MenuCommand.DisplayInfo:
+                using (var form = new DisplayInfoForm(_t, Font))
                 {
                     form.ShowDialog(this);
                 }

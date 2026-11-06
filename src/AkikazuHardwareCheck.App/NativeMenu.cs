@@ -19,6 +19,7 @@ internal enum MenuCommand
     AdvancedInfo,
     Maintenance,
     NetworkSpeedTest,
+    DisplayInfo,
     ShowHardware,
     ShowMonitor,
     ShowTests,
