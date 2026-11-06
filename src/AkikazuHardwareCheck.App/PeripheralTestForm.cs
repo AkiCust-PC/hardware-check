@@ -96,7 +96,22 @@ internal sealed class PeripheralTestForm : Form
         microphoneButton.Enabled = microphone is not null;
         microphoneButton.Click += async (_, _) => await RunMicrophoneTestAsync(microphoneButton);
 
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 8, Margin = new Padding(0) };
+        var leftButton = Ui.Button();
+        leftButton.Text = _t["audioCheck.left"];
+        leftButton.Enabled = speaker is not null;
+        leftButton.Click += async (_, _) => await PlayChannelAsync(leftButton, true, false);
+        var rightButton = Ui.Button();
+        rightButton.Text = _t["audioCheck.right"];
+        rightButton.Enabled = speaker is not null;
+        rightButton.Click += async (_, _) => await PlayChannelAsync(rightButton, false, true);
+        var stereoButton = Ui.Button();
+        stereoButton.Text = _t["audioCheck.stereo"];
+        stereoButton.Enabled = speaker is not null;
+        stereoButton.Click += async (_, _) => await PlayChannelAsync(stereoButton, true, true);
+        var channels = Ui.Flow();
+        channels.Controls.AddRange([leftButton, rightButton, stereoButton]);
+
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 9, Margin = new Padding(0) };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         for (var row = 0; row < layout.RowCount; row++)
         {
@@ -107,9 +122,10 @@ internal sealed class PeripheralTestForm : Form
         AddRow(layout, 1, _t["ui.micTest"], microphone ?? _t["peripheralTest.notDetected"]);
         layout.Controls.Add(speakerButton, 0, 2);
         layout.Controls.Add(microphoneButton, 0, 3);
-        AddRow(layout, 4, _t["advanced.status"], "");
-        layout.Controls.Add(_speakerStatus, 0, 5);
-        layout.Controls.Add(_microphoneStatus, 0, 6);
+        layout.Controls.Add(channels, 0, 4);
+        AddRow(layout, 5, _t["advanced.status"], "");
+        layout.Controls.Add(_speakerStatus, 0, 6);
+        layout.Controls.Add(_microphoneStatus, 0, 7);
         page.Controls.Add(layout);
         return page;
     }
@@ -328,6 +344,23 @@ internal sealed class PeripheralTestForm : Form
         catch (Exception exception)
         {
             MessageBox.Show(this, _t["peripheralTest.audioFailed", exception.Message], _t["ui.speakerTest"], MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            button.Enabled = true;
+        }
+    }
+
+    private async Task PlayChannelAsync(Button button, bool left, bool right)
+    {
+        button.Enabled = false;
+        try
+        {
+            await Task.Run(() => AudioCheck.PlayChannel(left, right));
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(this, _t["peripheralTest.audioFailed", exception.Message], _t["peripheralTest.audio"], MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         finally
         {

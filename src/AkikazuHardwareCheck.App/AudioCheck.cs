@@ -24,6 +24,13 @@ internal static class AudioCheck
         player.PlaySync();
     }
 
+    public static void PlayChannel(bool left, bool right)
+    {
+        using var stream = new MemoryStream(TestTone.CreateChannelWave(left, right));
+        using var player = new SoundPlayer(stream);
+        player.PlaySync();
+    }
+
     public static void RecordAndPlayBack(Action onPlaybackStart)
     {
         Send($"open new type waveaudio alias {ALIAS}");

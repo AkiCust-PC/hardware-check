@@ -18,6 +18,35 @@ public static class TestTone
     // Well below full scale, so the first sound from an unknown speaker is not startling.
     private const double VOLUME = 0.3;
 
+    public static byte[] CreateChannelWave(bool left, bool right)
+    {
+        const double channelSeconds = 1.2;
+        var frames = (int)(SAMPLE_RATE * channelSeconds);
+        var dataBytes = frames * BYTES_PER_FRAME;
+        using var stream = new MemoryStream(HEADER_BYTES + dataBytes);
+        using var writer = new BinaryWriter(stream, Encoding.ASCII);
+        writer.Write(Encoding.ASCII.GetBytes("RIFF"));
+        writer.Write(HEADER_BYTES - 8 + dataBytes);
+        writer.Write(Encoding.ASCII.GetBytes("WAVEfmt "));
+        writer.Write(16);
+        writer.Write((short)1);
+        writer.Write((short)CHANNELS);
+        writer.Write(SAMPLE_RATE);
+        writer.Write(SAMPLE_RATE * BYTES_PER_FRAME);
+        writer.Write((short)BYTES_PER_FRAME);
+        writer.Write((short)BITS_PER_SAMPLE);
+        writer.Write(Encoding.ASCII.GetBytes("data"));
+        writer.Write(dataBytes);
+        for (var frame = 0; frame < frames; frame++)
+        {
+            var sample = Sample(frame, frames);
+            writer.Write(left ? sample : (short)0);
+            writer.Write(right ? sample : (short)0);
+        }
+
+        return stream.ToArray();
+    }
+
     public static byte[] CreateWave()
     {
         var toneFrames = (int)(SAMPLE_RATE * TONE_SECONDS);
