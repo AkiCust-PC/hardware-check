@@ -20,7 +20,6 @@ namespace AkikazuHardwareCheck.Core.Configuration;
 /// <param name="BackgroundPanY">Picture shift as a share of the window height.</param>
 /// <param name="IsHardwarePanelHidden">Whether the hardware list is hidden.</param>
 /// <param name="IsTestPanelHidden">Whether the monitoring and test side is hidden.</param>
-/// <param name="FanReferenceRpm">Reference speed used for the fan progress bars. It is not a hardware rating.</param>
 /// <param name="IsAlwaysOnTop">Whether the window stays above others.</param>
 public sealed record AppSettings(
     string? Language = null,
@@ -39,8 +38,7 @@ public sealed record AppSettings(
     double BackgroundPanY = 0,
     bool IsHardwarePanelHidden = false,
     bool IsTestPanelHidden = false,
-    bool IsAlwaysOnTop = false,
-    double FanReferenceRpm = 3000)
+    bool IsAlwaysOnTop = false)
 {
     private const string FOLDER_NAME = "AkikazuHardwareCheck";
 

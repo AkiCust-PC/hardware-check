@@ -92,6 +92,9 @@ public sealed class LhmSensorSource : ISensorSource
     {
         double? value = sensor.Value;
         var status = Classify(sensor.SensorType, value);
+        var maximum = sensor.Max is { } observedMaximum && float.IsFinite(observedMaximum) && observedMaximum > 0
+            ? (double?)observedMaximum
+            : null;
         return new SensorReading(
             hardware.Identifier.ToString(),
             hardware.Name,
@@ -103,7 +106,8 @@ public sealed class LhmSensorSource : ISensorSource
             UnitOf(sensor.SensorType),
             status,
             SENSOR_SOURCE,
-            sampledAt);
+            sampledAt,
+            maximum);
     }
 
     private static string UnitOf(SensorType type) => type switch

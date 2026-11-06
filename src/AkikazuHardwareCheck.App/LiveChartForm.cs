@@ -24,8 +24,8 @@ internal sealed class LiveChartForm : Form
     private readonly Translator _t;
     private readonly Func<LiveSnapshot> _readSnapshot;
     private readonly List<LiveSnapshot> _samples = [];
-    private readonly PictureBox _utilization = new() { Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.StretchImage, BorderStyle = BorderStyle.FixedSingle };
-    private readonly PictureBox _network = new() { Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.StretchImage, BorderStyle = BorderStyle.FixedSingle };
+    private readonly PictureBox _utilization = new() { Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.StretchImage, BorderStyle = BorderStyle.None };
+    private readonly PictureBox _network = new() { Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.StretchImage, BorderStyle = BorderStyle.None };
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 1000 };
     private DateTimeOffset? _lastAt;
 

@@ -195,8 +195,8 @@ public class MonitoringTests
     [Fact]
     public void LiveVoltageClockAndFansUseWhatCanBeRead()
     {
-        SensorReading Sensor(string type, string hardware, string name, double? value, string hardwareName = "CPU") =>
-            new($"/{hardware}", hardwareName, hardware, $"/{hardware}/{type}/{name}", name, type, value, "", value is null ? SensorStatus.NoValue : SensorStatus.Ok, "test", DateTimeOffset.UnixEpoch);
+        SensorReading Sensor(string type, string hardware, string name, double? value, string hardwareName = "CPU", double? maximum = null) =>
+            new($"/{hardware}", hardwareName, hardware, $"/{hardware}/{type}/{name}", name, type, value, "", value is null ? SensorStatus.NoValue : SensorStatus.Ok, "test", DateTimeOffset.UnixEpoch, maximum);
 
         SensorReading[] desktop =
         [
@@ -206,11 +206,11 @@ public class MonitoringTests
             Sensor("Clock", "Cpu", "Bus Speed", 100),
             Sensor("Clock", "GpuNvidia", "GPU Core", 2500, "RTX"),
             Sensor("Voltage", "GpuNvidia", "GPU Core", 1.05, "RTX"),
-            Sensor("Fan", "SuperIO", "CPU Fan", 1100),
-            Sensor("Fan", "SuperIO", "AIO Pump", 2800),
-            Sensor("Fan", "SuperIO", "Chassis Fan #1", 900),
+            Sensor("Fan", "SuperIO", "CPU Fan", 1100, maximum: 1300),
+            Sensor("Fan", "SuperIO", "AIO Pump", 2800, maximum: 3000),
+            Sensor("Fan", "SuperIO", "Chassis Fan #1", 900, maximum: 1200),
             Sensor("Fan", "SuperIO", "Fan #2", 0),
-            Sensor("Fan", "GpuNvidia", "GPU Fan", 0, "RTX"),
+            Sensor("Fan", "GpuNvidia", "GPU Fan", 0, "RTX", 1000),
         ];
 
         Assert.Equal(1.25, SensorSelector.CpuVoltage(desktop));
@@ -218,6 +218,7 @@ public class MonitoringTests
         Assert.Equal(2500, SensorSelector.GpuClock(desktop, "RTX"));
         Assert.Equal(1.05, SensorSelector.GpuVoltage(desktop, "RTX"));
         Assert.Equal(new FanSpeeds(1100, 2800, 0, 900), SensorSelector.Fans(desktop));
+        Assert.Equal(new FanMaxima(1300, 3000, 1000, 1200), SensorSelector.FanMaximums(desktop));
 
         // Laptop controllers name both fans, and unread clocks read 0.
         SensorReading[] laptop = [Sensor("Fan", "EmbeddedController", "CPU Fan", 3100), Sensor("Fan", "EmbeddedController", "GPU Fan", 2900), Sensor("Clock", "Cpu", "Core #1", 0)];
@@ -225,6 +226,7 @@ public class MonitoringTests
         Assert.Null(SensorSelector.CpuClock(laptop));
 
         Assert.Equal(new FanSpeeds(null, null, null, null), SensorSelector.Fans([]));
+        Assert.Equal(new FanMaxima(null, null, null, null), SensorSelector.FanMaximums([]));
     }
 
     [Fact]

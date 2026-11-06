@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace AkikazuHardwareCheck.Core.Models;
 
 /// <summary>The one data model behind the JSON technical record and the customer report.</summary>
@@ -180,7 +182,8 @@ public sealed record SensorReading(
     string Unit,
     SensorStatus Status,
     string Source,
-    DateTimeOffset SampledAt);
+    DateTimeOffset SampledAt,
+    [property: JsonIgnore] double? Maximum = null);
 
 public enum CoolingOutcome
 {

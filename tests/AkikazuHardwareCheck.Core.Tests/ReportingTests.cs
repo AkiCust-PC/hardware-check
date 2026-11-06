@@ -471,11 +471,10 @@ public class ReportingTests
         var path = Path.Combine(AppContext.BaseDirectory, $"test-output-{Guid.NewGuid():N}", "settings.json");
         try
         {
-            Assert.Null(new AppSettings(Language: AppLanguage.JAPANESE, CpuProtectionCelsius: 90, FanReferenceRpm: 2400).TrySave(path));
+            Assert.Null(new AppSettings(Language: AppLanguage.JAPANESE, CpuProtectionCelsius: 90).TrySave(path));
             var loaded = AppSettings.Load(path);
             Assert.Equal(AppLanguage.JAPANESE, loaded.Language);
             Assert.Equal(90, loaded.ToProfile().CpuProtectionCelsius);
-            Assert.Equal(2400, loaded.FanReferenceRpm);
 
             File.WriteAllText(path, "{ not json");
             Assert.Null(AppSettings.Load(path).Language);

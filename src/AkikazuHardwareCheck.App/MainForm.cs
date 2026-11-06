@@ -30,7 +30,8 @@ internal sealed class MainForm : Form
         (AppLanguage.ENGLISH, "English"),
     ];
 
-    private const int MONITOR_SECTION_HEIGHT = 197;
+    private const int MONITOR_SECTION_HEIGHT = 229;
+    private const int FAN_ROW_INDEX = 3;
     private const int METRIC_ROW_HEIGHT = 46;
     private const int CONTROL_SECTION_HEIGHT = 232;
 
@@ -311,7 +312,7 @@ internal sealed class MainForm : Form
         _chartButton.MinimumSize = new Size(0, Ui.BUTTON_MIN_HEIGHT);
         _chartButton.Margin = new Padding(0);
         _chartButton.Click += (_, _) => ShowLiveChart();
-        _monitorGroup = Ui.Section(_chartButton, BuildMonitorPanel());
+        _monitorGroup = Ui.Section(null, BuildMonitorPanel());
         _controlGroup = Ui.Section(null, BuildControlPanel());
         _detailsButton.Margin = new Padding(0, 0, 0, Ui.SPACING / 2);
         _resultGroup = Ui.Section(null, BuildResultPanel());
@@ -368,7 +369,7 @@ internal sealed class MainForm : Form
 
     private TableLayoutPanel BuildMonitorPanel()
     {
-        var panel = new TableLayoutPanel { ColumnCount = 4, RowCount = 4, Margin = new Padding(0) };
+        var panel = new TableLayoutPanel { ColumnCount = 4, RowCount = 5, Margin = new Padding(0) };
         for (var column = 0; column < panel.ColumnCount; column++)
         {
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
@@ -381,6 +382,7 @@ internal sealed class MainForm : Form
 
         // The fan row appears only when at least one fan can be read.
         panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));
+        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         MetricTile[][] rows =
         [
@@ -396,6 +398,11 @@ internal sealed class MainForm : Form
                 panel.Controls.Add(rows[row][column], column, row);
             }
         }
+
+        var chartRow = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false, Margin = new Padding(0, Ui.SPACING / 2, 0, 0) };
+        chartRow.Controls.Add(_chartButton);
+        panel.Controls.Add(chartRow, 0, 4);
+        panel.SetColumnSpan(chartRow, 4);
 
         _monitorPanel = panel;
         return panel;
@@ -1269,25 +1276,30 @@ internal sealed class MainForm : Form
         ShowPlain(_cpuClockTile, Format(SensorSelector.CpuClock(readings), "0", "MHz"));
         ShowPlain(_gpuVoltageTile, Format(SensorSelector.GpuVoltage(readings, model), "0.000", "V"));
         ShowPlain(_gpuClockTile, Format(SensorSelector.GpuClock(readings, model), "0", "MHz"));
-        ShowFans(SensorSelector.Fans(readings));
+        ShowFans(SensorSelector.Fans(readings), SensorSelector.FanMaximums(readings));
     }
 
     private static void ShowPlain(MetricTile tile, string text) => tile.Show(text, null, MetricLevel.Normal);
 
     /// <summary>Only fans that can be read get a tile. They fill the row from the left, and the row itself goes when there are none.</summary>
-    private void ShowFans(FanSpeeds fans)
+    private void ShowFans(FanSpeeds fans, FanMaxima maxima)
     {
-        (MetricTile Tile, double? Speed)[] tiles = [(_cpuFanTile, fans.Cpu), (_pumpTile, fans.Pump), (_gpuFanTile, fans.Gpu), (_caseFanTile, fans.Case)];
+        (MetricTile Tile, double? Speed, double? Maximum)[] tiles =
+        [
+            (_cpuFanTile, fans.Cpu, maxima.Cpu),
+            (_pumpTile, fans.Pump, maxima.Pump),
+            (_gpuFanTile, fans.Gpu, maxima.Gpu),
+            (_caseFanTile, fans.Case, maxima.Case),
+        ];
         for (var index = 0; index < tiles.Length; index++)
         {
             tiles[index].Tile.Name = index.ToString(CultureInfo.InvariantCulture);
         }
 
         var shown = tiles.Where(item => item.Speed is not null).ToList();
-        var reference = _settings.FanReferenceRpm;
-        foreach (var (tile, speed) in shown)
+        foreach (var (tile, speed, maximum) in shown)
         {
-            var fraction = reference > 0 && speed is { } rpm ? rpm / reference : (double?)null;
+            var fraction = maximum is > 0 && speed is { } rpm ? rpm / maximum : (double?)null;
             tile.Show(Format(speed, "0", "RPM"), fraction, MetricLevel.Normal);
         }
 
@@ -1300,7 +1312,7 @@ internal sealed class MainForm : Form
 
         _visibleFans = visibleFans;
         panel.SuspendLayout();
-        foreach (var (tile, speed) in tiles)
+        foreach (var (tile, speed, _) in tiles)
         {
             tile.Visible = speed is not null;
         }
@@ -1311,7 +1323,7 @@ internal sealed class MainForm : Form
         }
 
         var fanRowHeight = shown.Count > 0 ? LogicalToDeviceUnits(METRIC_ROW_HEIGHT) : 0;
-        panel.RowStyles[panel.RowCount - 1].Height = fanRowHeight;
+        panel.RowStyles[FAN_ROW_INDEX].Height = fanRowHeight;
         panel.ResumeLayout();
         _rightPanel.RowStyles[0].Height = LogicalToDeviceUnits(MONITOR_SECTION_HEIGHT) + fanRowHeight;
     }

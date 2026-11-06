@@ -5,6 +5,9 @@ namespace AkikazuHardwareCheck.Core.Monitoring;
 /// <summary>Null means that fan could not be read or has nothing attached.</summary>
 public sealed record FanSpeeds(double? Cpu, double? Pump, double? Gpu, double? Case);
 
+/// <summary>The highest speed observed by the sensor driver, used only as an adaptive bar reference.</summary>
+public sealed record FanMaxima(double? Cpu, double? Pump, double? Gpu, double? Case);
+
 /// <summary>
 /// Picks the sensors that represent a device for summaries, load checks and protection. Names come from LibreHardwareMonitor.
 /// </summary>
@@ -88,6 +91,29 @@ public static class SensorSelector
             fans.Where(reading => IsPump(reading) && reading.Value > 0).Max(reading => reading.Value),
             fans.Where(IsGpuFan).Max(reading => reading.Value),
             fans.Where(reading => !IsCpuFan(reading) && !IsGpuFan(reading) && !IsPump(reading) && reading.Value > 0).Max(reading => reading.Value));
+    }
+
+    /// <summary>
+    /// Observed per-fan maxima. They are not hardware ratings: the driver only records the highest value seen since it
+    /// started. They let the bar adapt to a 1200 RPM case fan and a 3000 RPM CPU fan without a guessed fixed maximum.
+    /// </summary>
+    public static FanMaxima FanMaximums(IEnumerable<SensorReading> readings)
+    {
+        var fans = readings.Where(reading => IsValidType(reading, "Fan")).ToList();
+        bool Has(SensorReading reading, string word) => reading.SensorName.Contains(word, StringComparison.OrdinalIgnoreCase);
+        bool IsPump(SensorReading reading) => Has(reading, "pump");
+        bool IsGpuFan(SensorReading reading) => IsGpu(reading.HardwareType) || Has(reading, "gpu");
+        bool IsCpuFan(SensorReading reading) => Has(reading, "cpu") && !IsGpuFan(reading) && !IsPump(reading);
+        double? MaxOf(Func<SensorReading, bool> predicate) => fans
+            .Where(predicate)
+            .Select(reading => reading.Maximum)
+            .Where(value => value is > 0)
+            .Max();
+        return new FanMaxima(
+            MaxOf(reading => IsCpuFan(reading)),
+            MaxOf(reading => IsPump(reading)),
+            MaxOf(reading => IsGpuFan(reading)),
+            MaxOf(reading => !IsCpuFan(reading) && !IsGpuFan(reading) && !IsPump(reading)));
     }
 
     public static bool IsGpuLoadName(string sensorName) =>
