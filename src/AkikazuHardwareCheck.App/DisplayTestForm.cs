@@ -22,6 +22,11 @@ internal sealed class DisplayTestForm : Form
     private int _index;
     private double _responseOffset;
     private int _uniformityLevel = 50;
+    private double _gamma = 2.2;
+    private float _sharpness = 12f;
+    private int _colorDistance = 6;
+    private int _responseSpeed = RESPONSE_SPEED;
+    private int _responseGap = RESPONSE_GAP;
 
     private static readonly Color[] SolidColors = [Color.Black, Color.White, Color.Red, Color.Lime, Color.Blue];
 
@@ -42,7 +47,7 @@ internal sealed class DisplayTestForm : Form
         _picture.MouseClick += (_, _) => Next();
         _animation.Tick += (_, _) =>
         {
-            _responseOffset += RESPONSE_SPEED * _animation.Interval / 1000d;
+            _responseOffset += _responseSpeed * _animation.Interval / 1000d;
             if (_responseOffset > ClientSize.Width + (RESPONSE_BLOCK * 2) + RESPONSE_GAP)
             {
                 _responseOffset = -(RESPONSE_BLOCK * 2) - RESPONSE_GAP;
@@ -73,7 +78,42 @@ internal sealed class DisplayTestForm : Form
                 _uniformityLevel = _uniformityLevel switch { 25 => 50, 50 => 75, _ => 25 };
                 Render();
                 break;
+            case Keys.Up:
+                AdjustPattern(1);
+                break;
+            case Keys.Down:
+                AdjustPattern(-1);
+                break;
         }
+    }
+
+    private void AdjustPattern(int direction)
+    {
+        switch (_index)
+        {
+            case 6:
+                _uniformityLevel = Math.Clamp(_uniformityLevel + (direction * 25), 25, 75);
+                break;
+            case 7:
+                _colorDistance = Math.Clamp(_colorDistance + direction, 1, 32);
+                break;
+            case 9:
+                _sharpness = Math.Clamp(_sharpness + direction, 10, 18);
+                break;
+            case 11:
+                _gamma = Math.Clamp(_gamma + (direction * 0.05), 1, 3);
+                break;
+            case 12:
+                _responseSpeed = Math.Clamp(_responseSpeed + (direction * 480), 480, 3840);
+                break;
+            case 0:
+                return;
+            default:
+                return;
+        }
+
+        UpdateHint();
+        Render();
     }
 
     private void Next() => ShowPattern((_index + 1) % 13);
@@ -89,8 +129,22 @@ internal sealed class DisplayTestForm : Form
             _responseOffset = -(RESPONSE_BLOCK * 2) - RESPONSE_GAP;
         }
 
-        _hint.Text = $"{_t["peripheralTest.displayHint"]}  {index + 1}/13";
+        UpdateHint();
         Render();
+    }
+
+    private void UpdateHint()
+    {
+        var detail = _index switch
+        {
+            6 => $"  {_uniformityLevel}%",
+            7 => $"  Δ{_colorDistance}",
+            9 => $"  {_sharpness:0}pt",
+            11 => $"  γ{_gamma:0.00}",
+            12 => $"  {_responseSpeed}px/s",
+            _ => string.Empty,
+        };
+        _hint.Text = $"{_t["peripheralTest.displayHint"]}  {_index + 1}/13{detail}";
     }
 
     private void Render()
@@ -175,10 +229,11 @@ internal sealed class DisplayTestForm : Form
         graphics.DrawEllipse(ring, size.Width / 2f - radius, size.Height / 2f - radius, radius * 2, radius * 2);
     }
 
-    private static void DrawColorDistance(Graphics graphics, Size size)
+    private void DrawColorDistance(Graphics graphics, Size size)
     {
         graphics.Clear(Color.FromArgb(128, 128, 128));
-        using var brush = new SolidBrush(Color.FromArgb(134, 134, 134));
+        var level = Math.Clamp(128 + _colorDistance, 0, 255);
+        using var brush = new SolidBrush(Color.FromArgb(level, level, level));
         var width = Math.Max(80, size.Width * 3 / 10);
         var height = Math.Max(80, size.Height * 3 / 10);
         graphics.FillRectangle(brush, (size.Width - width) / 2, (size.Height - height) / 2, width, height);
@@ -187,7 +242,7 @@ internal sealed class DisplayTestForm : Form
     private void DrawSharpness(Graphics graphics, Size size)
     {
         graphics.Clear(Color.White);
-        using var font = new Font("Segoe UI", 12f, FontStyle.Regular, GraphicsUnit.Point);
+        using var font = new Font("Segoe UI", _sharpness, FontStyle.Regular, GraphicsUnit.Point);
         using var brush = new SolidBrush(Color.Black);
         const string sample = "The quick brown fox jumps over the lazy dog. 0123456789 汉 字 カナ";
         var text = string.Join(' ', Enumerable.Repeat(sample, Math.Max(1, size.Width * size.Height / (sample.Length * 900))));
@@ -210,7 +265,7 @@ internal sealed class DisplayTestForm : Form
         }
     }
 
-    private static void DrawGamma(Graphics graphics, Size size)
+    private void DrawGamma(Graphics graphics, Size size)
     {
         graphics.Clear(Color.Black);
         using var white = new SolidBrush(Color.White);
@@ -219,7 +274,7 @@ internal sealed class DisplayTestForm : Form
             graphics.FillRectangle(white, x, 0, 1, size.Height);
         }
 
-        var gray = (int)Math.Round(255 * Math.Pow(0.5, 1 / 2.2));
+        var gray = (int)Math.Round(255 * Math.Pow(0.5, 1 / _gamma));
         using var circle = new SolidBrush(Color.FromArgb(gray, gray, gray));
         var radius = Math.Min(size.Width, size.Height) * 0.15f;
         graphics.FillEllipse(circle, size.Width / 2f - radius, size.Height / 2f - radius, radius * 2, radius * 2);
@@ -233,6 +288,6 @@ internal sealed class DisplayTestForm : Form
         var x = (float)_responseOffset;
         var y = size.Height / 2f - RESPONSE_BLOCK / 2f;
         graphics.FillRectangle(left, x, y, RESPONSE_BLOCK, RESPONSE_BLOCK);
-        graphics.FillRectangle(right, x + RESPONSE_BLOCK + RESPONSE_GAP, y, RESPONSE_BLOCK, RESPONSE_BLOCK);
+        graphics.FillRectangle(right, x + RESPONSE_BLOCK + _responseGap, y, RESPONSE_BLOCK, RESPONSE_BLOCK);
     }
 }

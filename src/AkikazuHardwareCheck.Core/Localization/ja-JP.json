@@ -392,6 +392,8 @@
   "hud.gpuLoad": "GPU 使用率",
   "hud.gpuTemp": "GPU 温度",
   "hud.memory": "メモリ使用率",
+  "hud.resolution": "解像度",
+  "hud.refresh": "リフレッシュレート",
   "ruler.color": "定規の色",
   "ruler.opacity": "定規の不透明度",
   "ruler.spacing": "目盛り間隔 px",

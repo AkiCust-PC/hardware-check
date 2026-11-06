@@ -392,6 +392,8 @@
   "hud.gpuLoad": "GPU load",
   "hud.gpuTemp": "GPU temperature",
   "hud.memory": "Memory load",
+  "hud.resolution": "Resolution",
+  "hud.refresh": "Refresh rate",
   "ruler.color": "Ruler color",
   "ruler.opacity": "Ruler opacity",
   "ruler.spacing": "Tick spacing px",

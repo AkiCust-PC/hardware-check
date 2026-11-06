@@ -73,6 +73,23 @@ internal sealed class GameHudForm : Form
         if ((_items & 4) != 0) Add(parts, "GPU", sample.GpuLoad, "%");
         if ((_items & 8) != 0) Add(parts, string.Empty, sample.GpuTemperature, "°C");
         if ((_items & 16) != 0) Add(parts, "MEM", sample.MemoryLoad, "%");
+        if ((_items & 32) != 0)
+        {
+            var bounds = Screen.PrimaryScreen?.Bounds;
+            if (bounds is { } area)
+            {
+                parts.Add($"{area.Width}x{area.Height}");
+            }
+        }
+
+        if ((_items & 64) != 0)
+        {
+            var refresh = DisplayInfoForm.GetRefreshRate();
+            if (refresh > 0)
+            {
+                parts.Add($"{refresh} Hz");
+            }
+        }
         var text = string.Join("   ", parts);
         if (text.Length == 0)
         {

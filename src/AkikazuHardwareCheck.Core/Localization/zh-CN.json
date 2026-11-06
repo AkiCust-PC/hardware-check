@@ -392,6 +392,8 @@
   "hud.gpuLoad": "GPU 占用",
   "hud.gpuTemp": "GPU 温度",
   "hud.memory": "内存占用",
+  "hud.resolution": "分辨率",
+  "hud.refresh": "刷新率",
   "ruler.color": "标尺颜色",
   "ruler.opacity": "标尺不透明度",
   "ruler.spacing": "刻度间距 px",

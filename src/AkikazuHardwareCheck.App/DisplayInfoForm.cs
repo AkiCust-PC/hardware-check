@@ -26,7 +26,7 @@ internal sealed class DisplayInfoForm : Form
         var screen = Screen.PrimaryScreen;
         var width = screen?.Bounds.Width ?? 0;
         var height = screen?.Bounds.Height ?? 0;
-        var refresh = CurrentRefreshRate();
+        var refresh = GetRefreshRate();
         var dpi = DeviceDpi;
 
         var table = new TableLayoutPanel { ColumnCount = 2, AutoSize = true, Margin = new Padding(0) };
@@ -58,7 +58,7 @@ internal sealed class DisplayInfoForm : Form
         table.Controls.Add(new Label { Text = value, AutoSize = true, Margin = new Padding(0, 0, 0, Ui.SPACING) }, 1, row);
     }
 
-    private int CurrentRefreshRate()
+    internal static int GetRefreshRate()
     {
         var mode = new DEVMODE { dmSize = (short)Marshal.SizeOf<DEVMODE>() };
         return EnumDisplaySettings(null, ENUM_CURRENT_SETTINGS, ref mode) ? mode.dmDisplayFrequency : 0;

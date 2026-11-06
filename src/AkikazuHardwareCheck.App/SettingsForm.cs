@@ -70,7 +70,7 @@ internal sealed class SettingsForm : Form
         _rulerOpacity.Value = Math.Clamp(settings.RulerOpacity, 10, 100);
         _rulerSpacing.Value = Math.Clamp(settings.RulerSpacing, 20, 200);
         _hudItems.Height = LogicalToDeviceUnits(100);
-        var hudLabels = new[] { t["hud.cpuLoad"], t["hud.cpuTemp"], t["hud.gpuLoad"], t["hud.gpuTemp"], t["hud.memory"] };
+        var hudLabels = new[] { t["hud.cpuLoad"], t["hud.cpuTemp"], t["hud.gpuLoad"], t["hud.gpuTemp"], t["hud.memory"], t["hud.resolution"], t["hud.refresh"] };
         for (var index = 0; index < hudLabels.Length; index++)
         {
             _hudItems.Items.Add(hudLabels[index], (settings.HudItems & (1 << index)) != 0);
