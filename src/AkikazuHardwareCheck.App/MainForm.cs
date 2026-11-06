@@ -220,6 +220,11 @@ internal sealed class MainForm : Form
         // as the driver check in LoadHardwareAsync is done, before the slower WMI/disk enumeration.
         StartActivityMonitor();
         Refresh();
+        if (_settings.FloatingEnabled)
+        {
+            ShowFloating(activate: false);
+        }
+
         _ = LoadHardwareAsync();
     }
 
@@ -916,6 +921,7 @@ internal sealed class MainForm : Form
         var tools = menu.AddSubmenu(_t["ui.menuTools"]);
         NativeMenu.AddItem(tools, MenuCommand.Reload, _t["ui.reload"]);
         NativeMenu.AddItem(tools, MenuCommand.RestartToFirmware, _t["ui.restartToFirmware"]);
+        NativeMenu.AddItem(tools, MenuCommand.KeyboardFix, _t["ui.keyboardFix"]);
         NativeMenu.AddItem(tools, MenuCommand.Copy, $"{_t["ui.copy"]}\tCtrl+C");
         NativeMenu.AddSeparator(tools);
         NativeMenu.AddItem(tools, MenuCommand.AdvancedInfo, _t["ui.advancedInfo"]);
@@ -986,6 +992,9 @@ internal sealed class MainForm : Form
                 break;
             case MenuCommand.RestartToFirmware:
                 RestartToFirmware();
+                break;
+            case MenuCommand.KeyboardFix:
+                FixKeyboardLayout();
                 break;
             case MenuCommand.BackgroundColor:
                 ChooseBackgroundColor();
@@ -1250,6 +1259,7 @@ internal sealed class MainForm : Form
             WindowWidth = bounds.Width,
             WindowHeight = bounds.Height,
             IsMaximized = WindowState == FormWindowState.Maximized,
+            FloatingEnabled = _floatingForm is { IsDisposed: false } existing ? existing.Visible : _settings.FloatingEnabled,
             FloatingLeft = _floatingForm is { IsDisposed: false } ? floating.Left : _settings.FloatingLeft,
             FloatingTop = _floatingForm is { IsDisposed: false } ? floating.Top : _settings.FloatingTop,
             FloatingEdge = _floatingForm is { IsDisposed: false } ? floating.Edge : _settings.FloatingEdge,
@@ -1477,6 +1487,7 @@ internal sealed class MainForm : Form
         _testWorkspace = null;
         _hardwareWindow?.Close();
         _hardwareWindow = null;
+        var showFloating = _floatingForm is { IsDisposed: false, Visible: true } || _settings.FloatingEnabled;
         _floatingForm?.Dispose();
         _floatingForm = null;
 
@@ -1551,6 +1562,10 @@ internal sealed class MainForm : Form
         RenderResults();
         UpdateCommandStates();
         FitMessages();
+        if (showFloating && IsHandleCreated)
+        {
+            ShowFloating(activate: false);
+        }
     }
 
     /// <summary>Explicit fonts do not inherit from the form, so emphasis is rebuilt whenever the language font changes.</summary>
@@ -1663,12 +1678,16 @@ internal sealed class MainForm : Form
         form.Show(this);
     }
 
-    private void ShowFloating()
+    private void ShowFloating(bool activate = true)
     {
         if (_floatingForm is { IsDisposed: false })
         {
             _floatingForm.Show();
-            _floatingForm.Activate();
+            if (activate)
+            {
+                _floatingForm.Activate();
+            }
+
             return;
         }
 
@@ -1687,9 +1706,19 @@ internal sealed class MainForm : Form
             edge,
             _settings.FloatingInfoVisible);
         form.FormClosed += (_, _) => _floatingForm = null;
+        form.VisibleChanged += (_, _) =>
+        {
+            if (!form.IsDisposed)
+            {
+                _settings = _settings with { FloatingEnabled = form.Visible };
+            }
+        };
         _floatingForm = form;
         form.Show();
-        form.Activate();
+        if (activate)
+        {
+            form.Activate();
+        }
     }
 
     private CrosshairSettings CurrentCrosshair() => new(
@@ -2649,6 +2678,51 @@ internal sealed class MainForm : Form
             UpdateHud();
             UpdateRuler();
             UpdateCommandStates();
+        }
+    }
+
+    private void FixKeyboardLayout()
+    {
+        var current = KeyboardLayoutFix.Current(_t);
+        if (MessageBox.Show(this, _t["keyboardFix.confirm", current], _t["keyboardFix.title"], MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+        {
+            return;
+        }
+
+        if (!Elevation.IsAdministrator())
+        {
+            if (Environment.ProcessPath is not { } path)
+            {
+                SetStatus(_t["keyboardFix.failed", "ProcessPath"], isAlert: true);
+                return;
+            }
+
+            if (MessageBox.Show(this, _t["keyboardFix.needsAdmin"], _t["keyboardFix.title"], MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            {
+                return;
+            }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo(path, [Program.KEYBOARD_JAPANESE_ARGUMENT, _t.Language]) { UseShellExecute = true, Verb = "runas" })?.Dispose();
+            }
+            catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
+            {
+                SetStatus(_t["keyboardFix.failed", exception.Message], isAlert: true);
+            }
+
+            return;
+        }
+
+        try
+        {
+            KeyboardLayoutFix.ApplyJapanese106();
+            SetStatus(_t["keyboardFix.done"]);
+            MessageBox.Show(this, _t["keyboardFix.done"], _t["keyboardFix.title"], MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception exception) when (exception is UnauthorizedAccessException or InvalidOperationException or System.Security.SecurityException)
+        {
+            SetStatus(_t["keyboardFix.failed", exception.Message], isAlert: true);
         }
     }
 

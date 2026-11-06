@@ -10,6 +10,7 @@ internal enum MenuCommand
     OpenFolder,
     Settings,
     RestartToFirmware,
+    KeyboardFix,
     BackgroundColor,
     BackgroundImage,
     BackgroundAdjust,

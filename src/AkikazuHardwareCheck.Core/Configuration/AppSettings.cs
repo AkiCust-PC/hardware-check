@@ -27,6 +27,7 @@ namespace AkikazuHardwareCheck.Core.Configuration;
 /// <param name="WindowWidth">Last main-window width.</param>
 /// <param name="WindowHeight">Last main-window height.</param>
 /// <param name="IsMaximized">Whether the main window was maximized.</param>
+/// <param name="FloatingEnabled">Whether the floating window is shown on startup.</param>
 /// <param name="FloatingLeft">Last floating-window left edge.</param>
 /// <param name="FloatingTop">Last floating-window top edge.</param>
 /// <param name="FloatingSnapped">Whether the floating window was docked to an edge.</param>
@@ -56,6 +57,7 @@ public sealed record AppSettings(
     int? WindowWidth = null,
     int? WindowHeight = null,
     bool IsMaximized = false,
+    bool FloatingEnabled = true,
     int? FloatingLeft = null,
     int? FloatingTop = null,
     bool FloatingSnapped = false,
@@ -102,7 +104,16 @@ public sealed record AppSettings(
     {
         try
         {
-            return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path)) ?? new AppSettings();
+            var json = File.ReadAllText(path);
+            var settings = JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
+            using var document = JsonDocument.Parse(json);
+            if (!document.RootElement.TryGetProperty(nameof(AppSettings.FloatingEnabled), out _))
+            {
+                // Older settings files predate the floating-window flag; the new default is on.
+                settings = settings with { FloatingEnabled = true };
+            }
+
+            return settings;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
         {

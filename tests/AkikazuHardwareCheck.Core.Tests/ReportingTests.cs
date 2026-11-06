@@ -486,6 +486,28 @@ public class ReportingTests
     }
 
     [Fact]
+    public void MissingFloatingFlagDefaultsOn()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, $"test-output-{Guid.NewGuid():N}", "settings.json");
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, "{\"Language\":\"zh-CN\"}");
+            Assert.True(AppSettings.Load(path).FloatingEnabled);
+
+            File.WriteAllText(path, "{\"FloatingEnabled\":false}");
+            Assert.False(AppSettings.Load(path).FloatingEnabled);
+        }
+        finally
+        {
+            if (Directory.Exists(Path.GetDirectoryName(path)))
+            {
+                Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void ProfileFromSettingsStaysInTheSupportedRange()
     {
         var profile = new AppSettings(GpuStressSeconds: 5, CpuStressSeconds: 1000).ToProfile();

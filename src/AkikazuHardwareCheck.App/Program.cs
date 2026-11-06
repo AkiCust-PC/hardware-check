@@ -9,6 +9,7 @@ namespace AkikazuHardwareCheck.App;
 internal static class Program
 {
     public const string REMOVE_DRIVER_ARGUMENT = "--remove-driver";
+    public const string KEYBOARD_JAPANESE_ARGUMENT = "--keyboard-106";
 
     private const string NO_ELEVATE_ARGUMENT = "--no-elevate";
     private const string INSTANCE_MUTEX_NAME = "Local\\AkikazuHardwareCheck.SingleInstance";
@@ -23,6 +24,12 @@ internal static class Program
         if (args is [REMOVE_DRIVER_ARGUMENT, var parentId, var removesPackage, var language])
         {
             RemoveDriverAfterExit(parentId, removesPackage, language);
+            return;
+        }
+
+        if (args is [KEYBOARD_JAPANESE_ARGUMENT, var keyboardLanguage])
+        {
+            ApplyKeyboardFix(keyboardLanguage);
             return;
         }
 
@@ -145,6 +152,22 @@ internal static class Program
 
     [System.Runtime.InteropServices.DllImport("kernel32.dll")]
     private static extern uint SetErrorMode(uint mode);
+
+    /// <summary>Runs in the elevated helper so the main window does not need to restart.</summary>
+    private static void ApplyKeyboardFix(string language)
+    {
+        ApplicationConfiguration.Initialize();
+        var t = Translator.Load(language);
+        try
+        {
+            KeyboardLayoutFix.ApplyJapanese106();
+            MessageBox.Show(t["keyboardFix.done"], t["keyboardFix.title"], MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception exception) when (exception is UnauthorizedAccessException or InvalidOperationException or System.Security.SecurityException)
+        {
+            MessageBox.Show(t["keyboardFix.failed", exception.Message], t["keyboardFix.title"], MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
 
     /// <summary>The driver can only stop once the main program has closed it, which is when that process ends.</summary>
     private static void RemoveDriverAfterExit(string parentId, string removesPackage, string language)

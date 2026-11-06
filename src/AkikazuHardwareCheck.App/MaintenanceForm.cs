@@ -13,10 +13,6 @@ internal sealed class MaintenanceForm : Form
     private readonly ListView _software = ListViewTable.Create();
     private readonly ListView _processes = ListViewTable.Create();
     private readonly ListView _events = ListViewTable.Create();
-    private readonly CheckedListBox _cleanup = new() { Dock = DockStyle.Fill, CheckOnClick = true, IntegralHeight = false };
-    private readonly Button _scanCleanup = Ui.Button();
-    private readonly Button _cleanCleanup = Ui.Button();
-    private readonly List<JunkEntry> _junkEntries = [];
     private readonly Label _status = Ui.Label();
 
     public MaintenanceForm(Translator t, Font font)
@@ -34,7 +30,6 @@ internal sealed class MaintenanceForm : Form
         tabs.TabPages.Add(BuildSoftwarePage());
         tabs.TabPages.Add(BuildProcessPage());
         tabs.TabPages.Add(BuildEventPage());
-        tabs.TabPages.Add(BuildCleanupPage());
         tabs.TabPages.Add(BuildToolsPage());
 
         var refresh = Ui.Button();
@@ -143,81 +138,6 @@ internal sealed class MaintenanceForm : Form
         layout.Controls.Add(_events, 0, 1);
         page.Controls.Add(layout);
         return page;
-    }
-
-    private TabPage BuildCleanupPage()
-    {
-        var page = new TabPage(_t["maintenance.cleanup"]) { Padding = new Padding(Ui.SPACING), UseVisualStyleBackColor = true };
-        var hint = new Label { AutoSize = true, Text = _t["maintenance.cleanupHint"], MaximumSize = new Size(LogicalToDeviceUnits(840), 0), Margin = new Padding(0, 0, 0, Ui.SPACING) };
-        _scanCleanup.Text = _t["maintenance.scan"];
-        _scanCleanup.Click += async (_, _) => await ScanCleanupAsync();
-        _cleanCleanup.Text = _t["maintenance.clean"];
-        _cleanCleanup.Enabled = false;
-        _cleanCleanup.Click += async (_, _) => await CleanCleanupAsync();
-        var buttons = Ui.Flow();
-        buttons.Controls.AddRange([_scanCleanup, _cleanCleanup]);
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Margin = new Padding(0) };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.Controls.Add(hint, 0, 0);
-        layout.Controls.Add(_cleanup, 0, 1);
-        layout.Controls.Add(buttons, 0, 2);
-        page.Controls.Add(layout);
-        return page;
-    }
-
-    private async Task ScanCleanupAsync()
-    {
-        _cleanCleanup.Enabled = false;
-        _status.Text = _t["maintenance.scanning"];
-        var scan = await Task.Run(JunkCleaner.Scan);
-        if (IsDisposed)
-        {
-            return;
-        }
-
-        _junkEntries.Clear();
-        _cleanup.Items.Clear();
-        foreach (var entry in scan.Entries)
-        {
-            _junkEntries.Add(entry);
-            _cleanup.Items.Add($"{_t["junk." + entry.Category]} - {MaintenanceCollectors.FormatBytes(entry.Bytes)} ({entry.Files})", false);
-        }
-
-        _cleanCleanup.Enabled = _junkEntries.Count > 0;
-        _status.Text = scan.IsAdministrator ? _t["maintenance.cleanupScanned"] : _t["maintenance.cleanupAdminHint"];
-    }
-
-    private async Task CleanCleanupAsync()
-    {
-        var selected = _cleanup.CheckedIndices.Cast<int>().ToList();
-        if (selected.Count == 0)
-        {
-            _status.Text = _t["maintenance.nothingSelected"];
-            return;
-        }
-
-        if (MessageBox.Show(this, _t["maintenance.cleanConfirm"], _t["maintenance.clean"], MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
-        {
-            return;
-        }
-
-        var deleted = 0;
-        var bytes = 0L;
-        var skipped = 0;
-        foreach (var index in selected)
-        {
-            var result = await Task.Run(() => JunkCleaner.Clean(_junkEntries[index].Category));
-            deleted += result.DeletedFiles;
-            bytes += result.DeletedBytes;
-            skipped += result.SkippedFiles;
-        }
-
-        _status.Text = _t["maintenance.cleaned", deleted, MaintenanceCollectors.FormatBytes(bytes), skipped];
-        await ScanCleanupAsync();
     }
 
     private TabPage BuildToolsPage()
