@@ -20,6 +20,8 @@ internal sealed class AdvancedInfoForm : Form
     private readonly Func<AdvancedSnapshot> _rebuild;
     private readonly TreeView _tree = new() { Dock = DockStyle.Fill, HideSelection = false, FullRowSelect = true };
     private readonly SplitContainer _split = new() { Dock = DockStyle.Fill, Orientation = Orientation.Vertical, FixedPanel = FixedPanel.Panel1 };
+    private readonly ListView _list = new() { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, GridLines = true, MultiSelect = false };
+    private readonly CheckBox _viewToggle = new() { AutoSize = true, Checked = false, Margin = new Padding(0, 0, Ui.SPACING, 0) };
     private readonly DataGridView _grid = new()
     {
         Dock = DockStyle.Fill,
@@ -59,12 +61,25 @@ internal sealed class AdvancedInfoForm : Form
         ClientSize = new Size(LogicalToDeviceUnits(960), LogicalToDeviceUnits(640));
         MinimumSize = new Size(LogicalToDeviceUnits(800), LogicalToDeviceUnits(520));
 
+        _list.Columns.Add(t["advanced.attribute"], LogicalToDeviceUnits(170));
+        _list.Columns.Add(t["advanced.value"], LogicalToDeviceUnits(260));
+        _list.Columns.Add(t["advanced.status"], LogicalToDeviceUnits(90));
+        _list.Columns.Add(t["advanced.source"], LogicalToDeviceUnits(120));
+        _list.SelectedIndexChanged += (_, _) => ShowField();
+
+        _viewToggle.Text = t["advanced.tableView"];
+        _viewToggle.CheckedChanged += (_, _) => ShowView();
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "category", HeaderText = t["advanced.category"], FillWeight = 12, MinimumWidth = LogicalToDeviceUnits(80), SortMode = DataGridViewColumnSortMode.Automatic });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "group", HeaderText = t["advanced.group"], FillWeight = 16, MinimumWidth = LogicalToDeviceUnits(90), SortMode = DataGridViewColumnSortMode.Automatic });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "property", HeaderText = t["advanced.attribute"], FillWeight = 24, MinimumWidth = LogicalToDeviceUnits(120), SortMode = DataGridViewColumnSortMode.Automatic });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "value", HeaderText = t["advanced.value"], FillWeight = 28, MinimumWidth = LogicalToDeviceUnits(140), SortMode = DataGridViewColumnSortMode.Automatic });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "status", HeaderText = t["advanced.status"], FillWeight = 10, MinimumWidth = LogicalToDeviceUnits(70), SortMode = DataGridViewColumnSortMode.Automatic });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "source", HeaderText = t["advanced.source"], FillWeight = 10, MinimumWidth = LogicalToDeviceUnits(70), SortMode = DataGridViewColumnSortMode.Automatic });
+        _grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
+        _grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
+        _grid.GridColor = SystemColors.ControlLight;
+        _grid.RowTemplate.Height = LogicalToDeviceUnits(26);
+        _grid.Visible = false;
         _grid.SelectionChanged += (_, _) => ShowField();
         _grid.ColumnHeaderMouseClick += (_, e) =>
         {
@@ -88,6 +103,7 @@ internal sealed class AdvancedInfoForm : Form
         searchLabel.Text = _t["advanced.search"];
         top.Controls.Add(searchLabel);
         top.Controls.Add(_search);
+        top.Controls.Add(_viewToggle);
 
         AddButton(top, _t["advanced.refresh"], (_, _) => RefreshSnapshot());
         AddButton(top, _t["advanced.copy"], (_, _) => CopySelected());
@@ -100,6 +116,7 @@ internal sealed class AdvancedInfoForm : Form
         right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         right.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(DETAILS_HEIGHT)));
         right.Controls.Add(_grid, 0, 0);
+        right.Controls.Add(_list, 0, 0);
         right.Controls.Add(_details, 0, 1);
         _split.Panel2.Controls.Add(right);
 
@@ -157,6 +174,7 @@ internal sealed class AdvancedInfoForm : Form
         else
         {
             _grid.Rows.Clear();
+            _list.Items.Clear();
             _details.Text = _t["advanced.noSelection"];
         }
 
@@ -244,36 +262,60 @@ internal sealed class AdvancedInfoForm : Form
     private void ShowNode()
     {
         _grid.SuspendLayout();
+        _list.BeginUpdate();
         _grid.Rows.Clear();
+        _list.Items.Clear();
         if (_tree.SelectedNode?.Tag is InfoNode node)
         {
             foreach (var group in node.Groups)
             {
+                _list.Items.Add(new ListViewItem(group.Label) { ForeColor = Ui.MutedTextColor });
                 foreach (var field in group.Fields)
                 {
                     var value = field.Value ?? StateText(field.State);
                     var index = _grid.Rows.Add(node.Label, group.Label, field.Label, value, StateText(field.State), field.Provenance?.Source ?? "");
                     var row = _grid.Rows[index];
                     row.Tag = field;
+                    var item = new ListViewItem([field.Label, value, StateText(field.State), field.Provenance?.Source ?? ""]) { Tag = field };
                     if (field.State == InfoState.ReadFailed)
                     {
                         row.DefaultCellStyle.ForeColor = Ui.AlertColor;
+                        item.ForeColor = Ui.AlertColor;
                     }
                     else if (!field.HasValue)
                     {
                         row.DefaultCellStyle.ForeColor = Ui.MutedTextColor;
+                        item.ForeColor = Ui.MutedTextColor;
                     }
+
+                    _list.Items.Add(item);
                 }
             }
         }
 
+        _list.EndUpdate();
         _grid.ResumeLayout();
         _details.Text = "";
     }
 
+    private void ShowView()
+    {
+        _list.Visible = !_viewToggle.Checked;
+        _grid.Visible = _viewToggle.Checked;
+        if (_viewToggle.Checked && _grid.Rows.Count > 0)
+        {
+            _grid.CurrentCell = _grid.Rows[0].Cells[0];
+        }
+
+        _details.Text = _t["advanced.noSelection"];
+    }
+
     private void ShowField()
     {
-        if (_grid.CurrentRow?.Tag is not InfoField field)
+        var field = _viewToggle.Checked
+            ? _grid.CurrentRow?.Tag as InfoField
+            : _list.SelectedItems.Count > 0 ? _list.SelectedItems[0].Tag as InfoField : null;
+        if (field is null)
         {
             _details.Text = _t["advanced.noSelection"];
             return;
