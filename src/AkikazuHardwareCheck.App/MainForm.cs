@@ -150,6 +150,7 @@ internal sealed class MainForm : Form
     private SavedReport? _lastReport;
     private string? _statusText;
     private bool _closeAfterTest;
+    private bool _isClosing;
     private NotifyIcon? _trayIcon;
     private ContextMenuStrip? _trayMenu;
     private ContextMenuStrip? _contextMenu;
@@ -310,10 +311,16 @@ internal sealed class MainForm : Form
             return;
         }
 
+        _isClosing = true;
         _testWorkspace?.Close();
         RestoreTestWorkspace();
         _hardwareWindow?.Close();
         RestoreHardwareWindow();
+        // Owned modeless windows normally follow the owner, but closing them here avoids a repaint/teardown flash.
+        _advancedForm?.Close();
+        _advancedForm = null;
+        _chartForm?.Close();
+        _chartForm = null;
         SaveWindowState();
         _windowStateTimer.Dispose();
         _clockTimer.Dispose();
@@ -359,7 +366,7 @@ internal sealed class MainForm : Form
     /// <summary>Called by the hidden single-instance listener when another launch asks for this window.</summary>
     internal void RestoreFromExternalLaunch()
     {
-        if (IsDisposed)
+        if (IsDisposed || _isClosing)
         {
             return;
         }
@@ -867,7 +874,12 @@ internal sealed class MainForm : Form
 
         try
         {
-            using var process = Process.Start(new ProcessStartInfo(path, [Program.REMOVE_DRIVER_ARGUMENT, Environment.ProcessId.ToString(CultureInfo.InvariantCulture), _isDriverPackageOurs.ToString(), _t.Language]) { UseShellExecute = false });
+            using var process = Process.Start(new ProcessStartInfo(path, [Program.REMOVE_DRIVER_ARGUMENT, Environment.ProcessId.ToString(CultureInfo.InvariantCulture), _isDriverPackageOurs.ToString(), _t.Language])
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+            });
         }
         catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
         {
@@ -1288,12 +1300,17 @@ internal sealed class MainForm : Form
 
     private async Task ReloadHardwareAsync()
     {
-        if (IsTestRunning || _hardware is null)
+        if (IsTestRunning || _hardware is null || _isClosing)
         {
             return;
         }
 
         _hardware = await Task.Run(HardwareInfoService.Read);
+        if (IsDisposed || _isClosing)
+        {
+            return;
+        }
+
         FillTargetBox();
         RenderHardware();
         UpdateCommandStates();
@@ -1563,9 +1580,14 @@ internal sealed class MainForm : Form
     {
         _phaseLabel.Text = _t["ui.preparingSensors"];
         await PrepareSensorDriverAsync();
+        if (IsDisposed || _isClosing)
+        {
+            return;
+        }
+
         _phaseLabel.Text = _t["ui.loading"];
         _hardware = await Task.Run(HardwareInfoService.Read);
-        if (IsDisposed)
+        if (IsDisposed || _isClosing)
         {
             return;
         }
@@ -2303,7 +2325,7 @@ internal sealed class MainForm : Form
         }
 
         var reliability = await Task.Run(ReliabilityCollector.Read);
-        if (_hardware is { } hardware)
+        if (!IsDisposed && !_isClosing && _hardware is { } hardware)
         {
             _hardware = hardware with { Reliability = reliability };
         }
