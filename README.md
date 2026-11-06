@@ -198,7 +198,7 @@ powershell -ExecutionPolicy Bypass -File scripts/publish.ps1
 - 测试报告：A4 HTML，用默认浏览器打开后打印或另存为 PDF。
 - 技术记录：JSON，格式见 [JSON 格式说明](docs/json-format.md)。在网站的服务表单点“导入测试报告”选择它，机种和测试结果会填入表单。验收、签名都在网站表单完成，工具不再包含。
 - 默认保存到 `文档\AkikazuHardwareCheck\Reports`，可在设置中修改。文件保留到员工自行删除，不自动清理。
-- 设置保存在 `%LOCALAPPDATA%\AkikazuHardwareCheck\settings.json`。未处理异常不弹窗，写入同目录 `error.log` 后直接退出，避免影响现场操作。
+- 设置保存在 `%LOCALAPPDATA%\AkikazuHardwareCheck\settings.json`。窗口尺寸/位置、最大化状态、硬件/监控/测试显示开关，以及悬浮球的位置、停靠状态和信息显隐都会记住，下次启动恢复；如果保存的位置已经不在任何显示器内，会移回主屏幕。未处理异常不弹窗，写入同目录 `error.log` 后直接退出，避免影响现场操作。
 
 ## 隐私
 

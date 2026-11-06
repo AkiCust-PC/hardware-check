@@ -25,6 +25,15 @@ namespace AkikazuHardwareCheck.Core.Configuration;
 /// <param name="ShowTrayIcon">Whether the notification-area icon is shown.</param>
 /// <param name="CloseToTray">Whether closing the main window hides it instead of exiting.</param>
 /// <param name="StartWithWindows">Whether the current user starts the program at sign-in.</param>
+/// <param name="WindowX">Last main-window left edge.</param>
+/// <param name="WindowY">Last main-window top edge.</param>
+/// <param name="WindowWidth">Last main-window width.</param>
+/// <param name="WindowHeight">Last main-window height.</param>
+/// <param name="IsMaximized">Whether the main window was maximized.</param>
+/// <param name="FloatingLeft">Last floating-window left edge.</param>
+/// <param name="FloatingTop">Last floating-window top edge.</param>
+/// <param name="FloatingSnapped">Whether the floating window was docked to an edge.</param>
+/// <param name="FloatingInfoVisible">Whether the floating window showed its readings.</param>
 public sealed record AppSettings(
     string? Language = null,
     string? ReportFolder = null,
@@ -46,7 +55,16 @@ public sealed record AppSettings(
     bool IsAlwaysOnTop = false,
     bool ShowTrayIcon = true,
     bool CloseToTray = true,
-    bool StartWithWindows = false)
+    bool StartWithWindows = false,
+    int? WindowX = null,
+    int? WindowY = null,
+    int? WindowWidth = null,
+    int? WindowHeight = null,
+    bool IsMaximized = false,
+    int? FloatingLeft = null,
+    int? FloatingTop = null,
+    bool FloatingSnapped = false,
+    bool FloatingInfoVisible = true)
 {
     private const string FOLDER_NAME = "AkikazuHardwareCheck";
 

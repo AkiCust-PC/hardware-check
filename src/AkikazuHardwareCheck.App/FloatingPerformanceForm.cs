@@ -30,6 +30,8 @@ internal sealed class FloatingPerformanceForm : Form
     private readonly ContextMenuStrip _menu = new();
     private Point _dragCursor;
     private Point _dragStart;
+    private readonly int? _initialLeft;
+    private readonly int? _initialTop;
     private bool _dragging;
     private bool _dragMoved;
     private bool _snapped;
@@ -41,10 +43,21 @@ internal sealed class FloatingPerformanceForm : Form
     private string? _status;
     private DateTimeOffset _statusUntil;
 
-    public FloatingPerformanceForm(Translator t, Func<LiveSnapshot> readSnapshot, Font font)
+    public FloatingPerformanceForm(
+        Translator t,
+        Func<LiveSnapshot> readSnapshot,
+        Font font,
+        int? initialLeft = null,
+        int? initialTop = null,
+        bool snapped = false,
+        bool infoVisible = true)
     {
         _t = t;
         _readSnapshot = readSnapshot;
+        _initialLeft = initialLeft;
+        _initialTop = initialTop;
+        _snapped = snapped;
+        _infoVisible = infoVisible;
         Font = font;
         Icon = Ui.AppIcon;
         Text = t["floating.title"];
@@ -74,7 +87,20 @@ internal sealed class FloatingPerformanceForm : Form
         Shown += (_, _) =>
         {
             ApplyMode();
-            PositionInitialBall();
+            if (_initialLeft is { } left && _initialTop is { } top)
+            {
+                Location = new Point(left, top);
+                ClampToWorkingArea();
+            }
+            else if (_snapped)
+            {
+                SnapToNearestEdge(force: true);
+            }
+            else
+            {
+                PositionInitialBall();
+            }
+
             RefreshSample();
             _sampleTimer.Start();
             _animationTimer.Start();
@@ -187,12 +213,24 @@ internal sealed class FloatingPerformanceForm : Form
         previous?.Dispose();
     }
 
+    public (int Left, int Top, bool Snapped, bool InfoVisible) CaptureState() => (Left, Top, _snapped, _infoVisible);
+
+    private void ClampToWorkingArea()
+    {
+        // Use a point inside the window rather than Screen.FromControl: a saved position can be off every monitor.
+        var area = Screen.FromPoint(new Point(Left + (Width / 2), Top + (Height / 2))).WorkingArea;
+        Left = Math.Clamp(Left, area.Left, Math.Max(area.Left, area.Right - Width));
+        Top = Math.Clamp(Top, area.Top, Math.Max(area.Top, area.Bottom - Height));
+    }
+
     private void PositionInitialBall()
     {
-        // Start on the primary work area; Screen.FromControl can resolve to an off-screen secondary monitor at startup.
-        var screen = Screen.PrimaryScreen?.WorkingArea ?? SystemInformation.WorkingArea;
-        Left = screen.Right - Width - DpiScale(48);
-        Top = screen.Top + DpiScale(120);
+        // Anchor near the cursor, which is guaranteed to be on a visible monitor in this interactive session.
+        var cursor = Cursor.Position;
+        var area = Screen.FromPoint(cursor).WorkingArea;
+        Left = Math.Clamp(cursor.X - (Width / 2), area.Left, Math.Max(area.Left, area.Right - Width));
+        var below = cursor.Y + DpiScale(36);
+        Top = below + Height <= area.Bottom ? below : Math.Max(area.Top, cursor.Y - Height - DpiScale(36));
     }
 
     private void DrawBall(Graphics graphics)

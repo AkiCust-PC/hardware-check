@@ -164,6 +164,7 @@ internal sealed class MainForm : Form
         ClientSize = new Size(LogicalToDeviceUnits(DEFAULT_CLIENT_WIDTH), LogicalToDeviceUnits(DEFAULT_CLIENT_HEIGHT));
         // This tested size is also the minimum: both sides show their text, while width and height stay independent.
         MinimumSize = Size;
+        RestoreWindowState();
 
         WireEvents();
         ApplyBackground();
@@ -267,6 +268,7 @@ internal sealed class MainForm : Form
             return;
         }
 
+        SaveWindowState();
         _clockTimer.Dispose();
         _backgroundSource?.Dispose();
         StopLiveMonitor();
@@ -906,6 +908,57 @@ internal sealed class MainForm : Form
         UpdateCommandStates();
     }
 
+    private void RestoreWindowState()
+    {
+        if (_settings.WindowWidth is { } width
+            && _settings.WindowHeight is { } height
+            && width > 0
+            && height > 0)
+        {
+            var bounds = new Rectangle(
+                _settings.WindowX ?? Left,
+                _settings.WindowY ?? Top,
+                Math.Max(MinimumSize.Width, width),
+                Math.Max(MinimumSize.Height, height));
+            if (!Screen.AllScreens.Any(screen => screen.WorkingArea.IntersectsWith(bounds)))
+            {
+                var area = Screen.PrimaryScreen?.WorkingArea ?? SystemInformation.WorkingArea;
+                bounds = new Rectangle(
+                    area.Left + Math.Max(0, (area.Width - bounds.Width) / 2),
+                    area.Top + Math.Max(0, (area.Height - bounds.Height) / 2),
+                    bounds.Width,
+                    bounds.Height);
+            }
+
+            Bounds = bounds;
+        }
+
+        if (_settings.IsMaximized)
+        {
+            WindowState = FormWindowState.Maximized;
+        }
+    }
+
+    private void SaveWindowState()
+    {
+        var bounds = WindowState == FormWindowState.Maximized && !RestoreBounds.IsEmpty
+            ? RestoreBounds
+            : Bounds;
+        var floating = _floatingForm is { IsDisposed: false } form ? form.CaptureState() : default;
+        SaveSettings(_settings with
+        {
+            WindowX = bounds.X,
+            WindowY = bounds.Y,
+            WindowWidth = bounds.Width,
+            WindowHeight = bounds.Height,
+            IsMaximized = WindowState == FormWindowState.Maximized,
+            FloatingLeft = _floatingForm is { IsDisposed: false } ? floating.Left : _settings.FloatingLeft,
+            FloatingTop = _floatingForm is { IsDisposed: false } ? floating.Top : _settings.FloatingTop,
+            FloatingSnapped = _floatingForm is { IsDisposed: false } ? floating.Snapped : _settings.FloatingSnapped,
+            FloatingInfoVisible = _floatingForm is { IsDisposed: false } ? floating.InfoVisible : _settings.FloatingInfoVisible,
+        });
+    }
+
     private void EnsureSomePanelVisible()
     {
         if (_settings.IsHardwarePanelHidden && _settings.IsMonitorPanelHidden && _settings.IsTestPanelHidden)
@@ -1294,7 +1347,14 @@ internal sealed class MainForm : Form
             return;
         }
 
-        var form = new FloatingPerformanceForm(_t, CurrentLiveSnapshot, Font);
+        var form = new FloatingPerformanceForm(
+            _t,
+            CurrentLiveSnapshot,
+            Font,
+            _settings.FloatingLeft,
+            _settings.FloatingTop,
+            _settings.FloatingSnapped,
+            _settings.FloatingInfoVisible);
         form.FormClosed += (_, _) => _floatingForm = null;
         _floatingForm = form;
         form.Show();
