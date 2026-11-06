@@ -36,7 +36,6 @@ internal sealed class MainForm : Form
     private const int WINDOW_STATE_SAVE_DELAY_MS = 500;
 
     private const int MONITOR_SECTION_HEIGHT = 340;
-    private const int MONITOR_CARD_HEADER_HEIGHT = 28;
     private const int CONTROL_SECTION_HEIGHT = 232;
 
     // Without the graphics card selector row.
@@ -535,11 +534,11 @@ internal sealed class MainForm : Form
             BackColor = SystemColors.Window,
             CellBorderStyle = TableLayoutPanelCellBorderStyle.None,
             AutoScroll = false,
-            MinimumSize = new Size(0, LogicalToDeviceUnits(142)),
         };
         card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        card.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(MONITOR_CARD_HEADER_HEIGHT)));
+        // A fixed title row keeps the icon and title fully visible; cards enforce a matching minimum height.
+        card.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(30)));
         card.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
         card.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
 
@@ -975,7 +974,7 @@ internal sealed class MainForm : Form
         }
 
         var fanHeight = _fanCard is { Visible: true } ? LogicalToDeviceUnits(150) : 0;
-        return _rightPanel.ClientSize.Height >= LogicalToDeviceUnits(360) + fanHeight;
+        return _rightPanel.ClientSize.Height >= LogicalToDeviceUnits(540) + fanHeight;
     }
 
     private void UpdateMonitorLayout()
@@ -1019,15 +1018,17 @@ internal sealed class MainForm : Form
 
         Control[] cards = [_cpuCard, _gpuCard, _systemCard, _fanCard];
         var cardRows = oneColumn ? cards.Length : 2;
+        var cardHeight = oneColumn ? LogicalToDeviceUnits(180) : LogicalToDeviceUnits(150);
         for (var row = 0; row < cardRows; row++)
         {
-            if (oneColumn && cards[row] == _fanCard)
+            if (cards[row] == _fanCard)
             {
                 panel.RowStyles.Add(new RowStyle(SizeType.Absolute, _fanCard.Visible ? LogicalToDeviceUnits(150) : 0));
             }
             else
             {
-                panel.RowStyles.Add(new RowStyle(SizeType.Percent, oneColumn ? 100f / 3 : 50f));
+                // Absolute card heights keep title and value rows intact at every window size.
+                panel.RowStyles.Add(new RowStyle(SizeType.Absolute, cardHeight));
             }
         }
 
