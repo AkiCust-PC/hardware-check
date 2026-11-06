@@ -18,6 +18,7 @@ internal enum MenuCommand
     Exit,
     AdvancedInfo,
     Maintenance,
+    NetworkSpeedTest,
     ShowHardware,
     ShowMonitor,
     ShowTests,
@@ -30,6 +31,7 @@ internal enum MenuCommand
     Updates,
     About,
     FirstLanguage = 100,
+    FirstKeyboardLayout = 300,
 }
 
 /// <summary>

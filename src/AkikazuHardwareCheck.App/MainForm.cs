@@ -774,6 +774,13 @@ internal sealed class MainForm : Form
         NativeMenu.AddSeparator(tools);
         NativeMenu.AddItem(tools, MenuCommand.AdvancedInfo, _t["ui.advancedInfo"]);
         NativeMenu.AddItem(tools, MenuCommand.Maintenance, _t["ui.maintenance"]);
+        NativeMenu.AddItem(tools, MenuCommand.NetworkSpeedTest, _t["networkTest.title"]);
+        var keyboardLayouts = menu.AddSubmenu(_t["ui.keyboardLayout"]);
+        var layouts = InputLanguage.InstalledInputLanguages.Cast<InputLanguage>().ToArray();
+        for (var index = 0; index < layouts.Length; index++)
+        {
+            NativeMenu.AddItem(keyboardLayouts, MenuCommand.FirstKeyboardLayout + index, layouts[index].LayoutName);
+        }
         NativeMenu.AddSeparator(tools);
         NativeMenu.AddItem(tools, MenuCommand.Crosshair, _t["crosshair.toggle"]);
         NativeMenu.AddItem(tools, MenuCommand.TestWindow, _t["ui.testWindow"]);
@@ -806,12 +813,25 @@ internal sealed class MainForm : Form
         NativeMenu.AddItem(help, MenuCommand.About, _t["ui.about"]);
 
         menu.SetRadio(MenuCommand.FirstLanguage, LanguageChoices.Length, MenuCommand.FirstLanguage + Array.FindIndex(LanguageChoices, choice => choice.Code == _t.Language));
+        var currentKeyboard = Array.FindIndex(layouts, language => language.Handle == InputLanguage.CurrentInputLanguage.Handle);
+        if (currentKeyboard >= 0)
+        {
+            menu.SetRadio(MenuCommand.FirstKeyboardLayout, layouts.Length, MenuCommand.FirstKeyboardLayout + currentKeyboard);
+        }
+
         menu.Attach(Handle, _menu);
         _menu = menu;
     }
 
     private void RunMenuCommand(int id)
     {
+        var keyboardIndex = id - (int)MenuCommand.FirstKeyboardLayout;
+        if (keyboardIndex >= 0 && keyboardIndex < InputLanguage.InstalledInputLanguages.Count)
+        {
+            ChangeKeyboardLayout(InputLanguage.InstalledInputLanguages[keyboardIndex]);
+            return;
+        }
+
         var languageIndex = id - (int)MenuCommand.FirstLanguage;
         if (languageIndex >= 0 && languageIndex < LanguageChoices.Length)
         {
@@ -856,6 +876,13 @@ internal sealed class MainForm : Form
                 break;
             case MenuCommand.Maintenance:
                 ShowMaintenance();
+                break;
+            case MenuCommand.NetworkSpeedTest:
+                using (var form = new NetworkSpeedTestForm(_t, Font))
+                {
+                    form.ShowDialog(this);
+                }
+
                 break;
             case MenuCommand.Floating:
                 ShowFloating();
@@ -2353,6 +2380,30 @@ internal sealed class MainForm : Form
             SetStatus(_t["ui.openFailed", exception.Message], isAlert: true);
         }
     }
+
+    private void ChangeKeyboardLayout(InputLanguage language)
+    {
+        try
+        {
+            var handle = language.Handle;
+            var systemChanged = SystemParametersInfo(SPI_SETDEFAULTINPUTLANG, 0, ref handle, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+            InputLanguage.CurrentInputLanguage = language;
+            SetStatus(systemChanged
+                ? _t["ui.keyboardLayoutChanged", language.LayoutName]
+                : _t["ui.keyboardLayoutCurrent", language.LayoutName]);
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            SetStatus(_t["ui.keyboardLayoutFailed", exception.Message], isAlert: true);
+        }
+    }
+
+    private const uint SPI_SETDEFAULTINPUTLANG = 0x005A;
+    private const uint SPIF_UPDATEINIFILE = 0x0001;
+    private const uint SPIF_SENDCHANGE = 0x0002;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SystemParametersInfo(uint action, uint parameter, ref IntPtr value, uint flags);
 
     private void OpenSettingsForm()
     {
