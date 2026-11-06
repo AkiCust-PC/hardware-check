@@ -23,6 +23,10 @@
     <ProjectReference Include="..\AkikazuHardwareCheck.Core\AkikazuHardwareCheck.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Used for every window's title bar, even when the host process has no icon of its own (tests, dotnet). -->
+    <EmbeddedResource Include="app.ico" LogicalName="app.ico" />
+  </ItemGroup>
+  <ItemGroup>
     <InternalsVisibleTo Include="AkikazuHardwareCheck.App.SmokeTests" />
   </ItemGroup>
   <!-- Debugger and crash-dump parts of the runtime, the WinForms designer, and a Linux-only helper of a dependency.

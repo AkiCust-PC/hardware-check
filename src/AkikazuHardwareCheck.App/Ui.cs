@@ -29,8 +29,29 @@ internal static class Ui
 
     public static Color MutedTextColor => HasCustomBackground ? SystemColors.ControlText : SystemColors.GrayText;
 
-    /// <summary>Reads the icon built into the executable, so every window matches it. Single-file builds keep it there too.</summary>
-    public static Icon? AppIcon { get; } = Environment.ProcessPath is { } path ? Icon.ExtractAssociatedIcon(path) : null;
+    /// <summary>
+    /// The icon embedded in this assembly, so every window keeps it in single-file builds and in test hosts whose own
+    /// executable has no icon. Falls back to the executable's icon if the resource is ever missing.
+    /// </summary>
+    public static Icon? AppIcon { get; } = LoadAppIcon();
+
+    private static Icon? LoadAppIcon()
+    {
+        using var resource = typeof(Ui).Assembly.GetManifestResourceStream("app.ico");
+        if (resource is not null)
+        {
+            return new Icon(resource);
+        }
+
+        try
+        {
+            return Environment.ProcessPath is { } path ? Icon.ExtractAssociatedIcon(path) : null;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>Han characters differ by region, so each language uses the Windows font drawn for it, at the system's size.</summary>
     public static Font FontFor(string language)
