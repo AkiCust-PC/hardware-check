@@ -34,9 +34,8 @@ internal sealed class MainForm : Form
     private const int DEFAULT_CLIENT_WIDTH = 1280;
     private const int DEFAULT_CLIENT_HEIGHT = 800;
 
-    private const int MONITOR_SECTION_HEIGHT = 229;
-    private const int FAN_ROW_INDEX = 3;
-    private const int METRIC_ROW_HEIGHT = 46;
+    private const int MONITOR_SECTION_HEIGHT = 340;
+    private const int MONITOR_CARD_HEADER_HEIGHT = 28;
     private const int CONTROL_SECTION_HEIGHT = 232;
 
     // Without the graphics card selector row.
@@ -103,6 +102,12 @@ internal sealed class MainForm : Form
     private TableLayoutPanel? _rootPanel;
     private TableLayoutPanel? _bodyPanel;
     private TableLayoutPanel? _monitorPanel;
+    private Control? _systemCard;
+    private Control? _fanCard;
+    private Label? _cpuCardTitle;
+    private Label? _gpuCardTitle;
+    private Label? _systemCardTitle;
+    private Label? _fanCardTitle;
     private string? _visibleFans;
     private Bitmap? _backgroundSource;
     private Size _backgroundSize;
@@ -474,43 +479,79 @@ internal sealed class MainForm : Form
 
     private TableLayoutPanel BuildMonitorPanel()
     {
-        var panel = new TableLayoutPanel { ColumnCount = 4, RowCount = 5, Margin = new Padding(0) };
-        for (var column = 0; column < panel.ColumnCount; column++)
-        {
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
-        }
-
-        for (var row = 0; row < 3; row++)
-        {
-            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(METRIC_ROW_HEIGHT)));
-        }
-
-        // The fan row appears only when at least one fan can be read.
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));
+        var panel = new TableLayoutPanel { ColumnCount = 2, RowCount = 3, Margin = new Padding(0) };
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
         panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        MetricTile[][] rows =
-        [
-            [_cpuTemperatureTile, _cpuLoadTile, _cpuVoltageTile, _cpuClockTile],
-            [_gpuTemperatureTile, _gpuLoadTile, _gpuVoltageTile, _gpuClockTile],
-            [_memoryLoadTile, _diskLoadTile, _uploadTile, _downloadTile],
-            [_cpuFanTile, _pumpTile, _gpuFanTile, _caseFanTile],
-        ];
-        for (var row = 0; row < rows.Length; row++)
-        {
-            for (var column = 0; column < rows[row].Length; column++)
-            {
-                panel.Controls.Add(rows[row][column], column, row);
-            }
-        }
+        var cpuCard = BuildMetricCard("\uE950", _t["monitor.cpu"], out _cpuCardTitle,
+            [_cpuTemperatureTile, _cpuLoadTile, _cpuVoltageTile, _cpuClockTile]);
+        var gpuCard = BuildMetricCard("\uE7F4", _t["monitor.gpu"], out _gpuCardTitle,
+            [_gpuTemperatureTile, _gpuLoadTile, _gpuVoltageTile, _gpuClockTile]);
+        _systemCard = BuildMetricCard("\uE7F1", _t["monitor.system"], out _systemCardTitle,
+            [_memoryLoadTile, _diskLoadTile, _uploadTile, _downloadTile]);
+        _fanCard = BuildMetricCard("", _t["monitor.fans"], out _fanCardTitle,
+            [_cpuFanTile, _pumpTile, _gpuFanTile, _caseFanTile]);
+
+        panel.Controls.Add(cpuCard, 0, 0);
+        panel.Controls.Add(gpuCard, 1, 0);
+        panel.Controls.Add(_systemCard, 0, 1);
+        panel.Controls.Add(_fanCard, 1, 1);
 
         var chartRow = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false, Margin = new Padding(0, Ui.SPACING / 2, 0, 0) };
         chartRow.Controls.Add(_chartButton);
-        panel.Controls.Add(chartRow, 0, 4);
-        panel.SetColumnSpan(chartRow, 4);
+        panel.Controls.Add(chartRow, 0, 2);
+        panel.SetColumnSpan(chartRow, 2);
 
         _monitorPanel = panel;
         return panel;
+    }
+
+    private Control BuildMetricCard(string icon, string title, out Label titleLabel, MetricTile[] tiles)
+    {
+        var card = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 3,
+            Margin = new Padding(0, 0, Ui.SPACING, Ui.SPACING),
+            Padding = new Padding(Ui.SPACING / 2),
+            BackColor = SystemColors.Window,
+            BorderStyle = BorderStyle.FixedSingle,
+            CellBorderStyle = TableLayoutPanelCellBorderStyle.None,
+        };
+        card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        card.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(MONITOR_CARD_HEADER_HEIGHT)));
+        card.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        card.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+
+        var header = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, WrapContents = false, Margin = new Padding(0) };
+        if (!string.IsNullOrEmpty(icon))
+        {
+            header.Controls.Add(Ui.IconLabel(icon, 12f));
+        }
+
+        titleLabel = new Label
+        {
+            AutoSize = true,
+            Text = title,
+            Font = new Font(Font, FontStyle.Bold),
+            Margin = new Padding(0, 0, 0, 0),
+            Anchor = AnchorStyles.Left,
+        };
+        header.Controls.Add(titleLabel);
+        card.Controls.Add(header, 0, 0);
+        card.SetColumnSpan(header, 2);
+        for (var index = 0; index < tiles.Length; index++)
+        {
+            tiles[index].Margin = new Padding(0, 0, Ui.SPACING, 0);
+            card.Controls.Add(tiles[index], index % 2, 1 + (index / 2));
+        }
+
+        return card;
     }
 
     private TableLayoutPanel BuildControlPanel()
@@ -1074,22 +1115,34 @@ internal sealed class MainForm : Form
             _resultGroup.Text = _t["ui.result"];
         }
 
-        _cpuTemperatureTile.SetCaption(_t["ui.cpuTemperature"]);
-        _cpuLoadTile.SetCaption(_t["ui.cpuLoad"]);
-        _gpuTemperatureTile.SetCaption(_t["ui.gpuTemperature"]);
-        _gpuLoadTile.SetCaption(_t["ui.gpuLoad"]);
-        _cpuVoltageTile.SetCaption(_t["ui.cpuVoltage"]);
-        _cpuClockTile.SetCaption(_t["ui.cpuClock"]);
-        _gpuVoltageTile.SetCaption(_t["ui.gpuVoltage"]);
-        _gpuClockTile.SetCaption(_t["ui.gpuClock"]);
-        _cpuFanTile.SetCaption(_t["ui.fanCpu"]);
-        _pumpTile.SetCaption(_t["ui.fanPump"]);
-        _gpuFanTile.SetCaption(_t["ui.fanGpu"]);
-        _caseFanTile.SetCaption(_t["ui.fanCase"]);
-        _memoryLoadTile.SetCaption(_t["ui.memoryLoad"]);
-        _diskLoadTile.SetCaption(_t["ui.diskLoad"]);
-        _uploadTile.SetCaption(_t["ui.upload"]);
-        _downloadTile.SetCaption(_t["ui.download"]);
+        _cpuTemperatureTile.SetCaption(_t["monitor.temperature"]);
+        _cpuLoadTile.SetCaption(_t["monitor.load"]);
+        _gpuTemperatureTile.SetCaption(_t["monitor.temperature"]);
+        _gpuLoadTile.SetCaption(_t["monitor.load"]);
+        _cpuVoltageTile.SetCaption(_t["monitor.voltage"]);
+        _cpuClockTile.SetCaption(_t["monitor.clock"]);
+        _gpuVoltageTile.SetCaption(_t["monitor.voltage"]);
+        _gpuClockTile.SetCaption(_t["monitor.clock"]);
+        _cpuFanTile.SetCaption(_t["monitor.fanCpu"]);
+        _pumpTile.SetCaption(_t["monitor.fanPump"]);
+        _gpuFanTile.SetCaption(_t["monitor.fanGpu"]);
+        _caseFanTile.SetCaption(_t["monitor.fanCase"]);
+        _memoryLoadTile.SetCaption(_t["monitor.memory"]);
+        _diskLoadTile.SetCaption(_t["monitor.disk"]);
+        _uploadTile.SetCaption(_t["monitor.upload"]);
+        _downloadTile.SetCaption(_t["monitor.download"]);
+        if (_cpuCardTitle is not null)
+        {
+            _cpuCardTitle.Text = _t["monitor.cpu"];
+            _gpuCardTitle!.Text = _t["monitor.gpu"];
+            _systemCardTitle!.Text = _t["monitor.system"];
+            _fanCardTitle!.Text = _t["monitor.fans"];
+        }
+
+        _cpuTemperatureTile.SetValueSize(14f);
+        _cpuLoadTile.SetValueSize(14f);
+        _gpuTemperatureTile.SetValueSize(14f);
+        _gpuLoadTile.SetValueSize(14f);
         _targetLabel.Text = _t["ui.targetGpu"];
         _gpuOnlyButton.Text = _t["ui.gpuOnly"];
         _cpuOnlyButton.Text = _t["ui.cpuOnly"];
@@ -1473,7 +1526,7 @@ internal sealed class MainForm : Form
             tile.Show(Format(speed, "0", "RPM"), fraction, MetricLevel.Normal);
         }
 
-        // Which fans can be read rarely changes, so the row is only rearranged when it does.
+        // The fan card disappears as a whole when nothing can be read; the system card then fills the row.
         var visibleFans = string.Join(",", shown.Select(item => item.Tile.Name));
         if (visibleFans == _visibleFans || _monitorPanel is not { } panel)
         {
@@ -1487,15 +1540,17 @@ internal sealed class MainForm : Form
             tile.Visible = speed is not null;
         }
 
-        for (var column = 0; column < shown.Count; column++)
+        if (_fanCard is not null)
         {
-            panel.SetColumn(shown[column].Tile, column);
+            _fanCard.Visible = shown.Count > 0;
         }
 
-        var fanRowHeight = shown.Count > 0 ? LogicalToDeviceUnits(METRIC_ROW_HEIGHT) : 0;
-        panel.RowStyles[FAN_ROW_INDEX].Height = fanRowHeight;
+        if (_systemCard is not null)
+        {
+            panel.SetColumnSpan(_systemCard, shown.Count > 0 ? 1 : 2);
+        }
+
         panel.ResumeLayout();
-        _rightPanel.RowStyles[0].Height = LogicalToDeviceUnits(MONITOR_SECTION_HEIGHT) + fanRowHeight;
     }
 
     private void ShowMetrics(double? cpuTemperature, double? cpuLoad, double? gpuTemperature, double? gpuLoad)

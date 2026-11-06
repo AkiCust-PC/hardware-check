@@ -86,6 +86,29 @@ internal static class Ui
         };
     }
 
+    /// <summary>Windows' own MDL2 icon font; no icon package or image assets are needed.</summary>
+    public static Label IconLabel(string glyph, float size = 12f)
+    {
+        var label = new Label
+        {
+            AutoSize = true,
+            Text = glyph,
+            ForeColor = SystemColors.Highlight,
+            Margin = new Padding(0, 0, SPACING / 2, 0),
+            Anchor = AnchorStyles.Left,
+        };
+        try
+        {
+            label.Font = new Font("Segoe MDL2 Assets", size);
+        }
+        catch (ArgumentException)
+        {
+            label.Font = new Font(SystemFonts.MessageBoxFont?.FontFamily ?? Control.DefaultFont.FontFamily, size);
+        }
+
+        return label;
+    }
+
     public static Label Label(bool isBold = false)
     {
         var label = new Label

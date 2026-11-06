@@ -155,6 +155,8 @@ internal sealed class MetricTile : TableLayoutPanel
         _value.Font = new Font(Font.FontFamily, VALUE_FONT_SIZE, FontStyle.Bold);
     }
 
+    public void SetValueSize(float size) => _value.Font = new Font(Font.FontFamily, size, FontStyle.Bold);
+
     public void Show(string value, double? fraction, MetricLevel level)
     {
         _value.Text = value;
