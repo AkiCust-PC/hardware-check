@@ -3,8 +3,8 @@ using AkikazuHardwareCheck.Core.Localization;
 namespace AkikazuHardwareCheck.App;
 
 /// <summary>
-/// A full Japanese 106-key keyboard check: every key is drawn as a native key cap, pressed keys light up, tested keys
-/// stay marked, and the maximum number of simultaneous keys is reported. No layout switch is needed for this test.
+/// A full keyboard check with Japanese 106-key and English 101-key layouts. Every key is drawn as a native key cap,
+/// pressed keys light up, tested keys stay marked, and the maximum number of simultaneous keys is reported.
 /// </summary>
 internal sealed class KeyboardTestView : UserControl
 {
@@ -15,6 +15,14 @@ internal sealed class KeyboardTestView : UserControl
     private readonly Translator _t;
     private readonly Panel _scroll = new() { Dock = DockStyle.Fill, AutoScroll = true };
     private readonly TableLayoutPanel _main = new() { AutoSize = true, Dock = DockStyle.Top, ColumnCount = 1, Margin = new Padding(0) };
+    private readonly FlowLayoutPanel _blocks = new()
+    {
+        AutoSize = true,
+        AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        Dock = DockStyle.Top,
+        WrapContents = false,
+        Margin = new Padding(0),
+    };
     private readonly Label _progress = Ui.Label();
     private readonly Label _pressedLabel = Ui.Label();
     private readonly Label _rollover = Ui.Label();
@@ -22,6 +30,7 @@ internal sealed class KeyboardTestView : UserControl
     private readonly List<(Keys Key, Label Label)> _keyLabels = [];
     private readonly HashSet<Keys> _tested = [];
     private readonly HashSet<Keys> _pressed = [];
+    private bool _isJapanese = true;
     private int _maxPressed;
 
     public KeyboardTestView(Translator t, Font font)
@@ -36,6 +45,28 @@ internal sealed class KeyboardTestView : UserControl
         reset.Text = t["peripheralTest.clear"];
         reset.Click += (_, _) => Reset();
 
+        var layoutLabel = new Label { Text = t["keyboardTest.layout"], AutoSize = true, Margin = new Padding(0, 6, Ui.SPACING, 0) };
+        var layout = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Width = LogicalToDeviceUnits(230),
+            Margin = new Padding(0, 0, Ui.SPACING, 0),
+        };
+        layout.Items.AddRange([t["keyboard.japanese"], t["keyboard.englishUs"]]);
+        layout.SelectedIndex = 0;
+        layout.SelectedIndexChanged += (_, _) =>
+        {
+            var japanese = layout.SelectedIndex == 0;
+            if (japanese == _isJapanese)
+            {
+                return;
+            }
+
+            _isJapanese = japanese;
+            BuildKeyboard();
+            Reset();
+        };
+
         var hint = new Label
         {
             Text = t["keyboardTest.hint"],
@@ -45,23 +76,12 @@ internal sealed class KeyboardTestView : UserControl
             Margin = new Padding(0, 0, 0, Ui.SPACING),
         };
 
-        var blocks = new FlowLayoutPanel
-        {
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Dock = DockStyle.Top,
-            WrapContents = false,
-            Margin = new Padding(0),
-        };
-        BuildMain();
-        blocks.Controls.Add(_main);
-        blocks.Controls.Add(BuildNavigation());
-        blocks.Controls.Add(BuildNumpad());
-        _scroll.Controls.Add(blocks);
+        BuildKeyboard();
+        _scroll.Controls.Add(_blocks);
 
         var top = Ui.Flow();
         top.WrapContents = false;
-        top.Controls.Add(reset);
+        top.Controls.AddRange([layoutLabel, layout, reset]);
 
         var status = Ui.Flow();
         status.WrapContents = false;
@@ -114,6 +134,16 @@ internal sealed class KeyboardTestView : UserControl
         UpdateStatus();
     }
 
+    private void BuildKeyboard()
+    {
+        _keyLabels.Clear();
+        _blocks.Controls.Clear();
+        BuildMain();
+        _blocks.Controls.Add(_main);
+        _blocks.Controls.Add(BuildNavigation());
+        _blocks.Controls.Add(BuildNumpad());
+    }
+
     private void BuildMain()
     {
         _main.Controls.Clear();
@@ -129,7 +159,7 @@ internal sealed class KeyboardTestView : UserControl
 
     private TableLayoutPanel BuildRow(IReadOnlyList<KeyDefinition> row)
     {
-        var unit = LogicalToDeviceUnits(34);
+        var unit = LogicalToDeviceUnits(32);
         var width = (int)Math.Round(row.Sum(key => key.Width) * unit);
         var line = new TableLayoutPanel
         {
@@ -194,7 +224,7 @@ internal sealed class KeyboardTestView : UserControl
 
     private TableLayoutPanel Grid(int columns, int rows)
     {
-        var unit = LogicalToDeviceUnits(34);
+        var unit = LogicalToDeviceUnits(32);
         var grid = new TableLayoutPanel
         {
             AutoSize = false,
@@ -254,21 +284,16 @@ internal sealed class KeyboardTestView : UserControl
         return control;
     }
 
-    private static IEnumerable<KeyDefinition[]> MainRows()
+    private IEnumerable<KeyDefinition[]> MainRows() => _isJapanese ? JapaneseRows() : AnsiRows();
+
+    private static IEnumerable<KeyDefinition[]> JapaneseRows()
     {
-        yield return
-        [
-            new(Keys.Escape, "Esc", 1),
-            .. Enumerable.Range(1, 12).Select(index => new KeyDefinition((Keys)((int)Keys.F1 + index - 1), $"F{index}", 1)),
-            new(Keys.PrintScreen, "Prt", 1),
-            new(Keys.Scroll, "Scr", 1),
-            new(Keys.Pause, "Pau", 1),
-        ];
+        yield return FunctionRow();
 
         yield return
         [
             new((Keys)0xDF, "半角/全角", 1.4f),
-            .. Enumerable.Range(0, 10).Select(index => new KeyDefinition((Keys)((int)Keys.D0 + ((index + 1) % 10)), ((index + 1) % 10).ToString(), 1)),
+            .. NumberKeys(),
             new(Keys.OemMinus, "-", 1),
             new(Keys.Oemplus, "^", 1),
             new(Keys.OemPipe, "¥", 1),
@@ -278,7 +303,7 @@ internal sealed class KeyboardTestView : UserControl
         yield return
         [
             new(Keys.Tab, "Tab", 1.5f),
-            .. "QWERTYUIOP".Select(letter => new KeyDefinition((Keys)Enum.Parse(typeof(Keys), letter.ToString()), letter.ToString(), 1)),
+            .. LetterKeys("QWERTYUIOP"),
             new(Keys.OemOpenBrackets, "@", 1),
             new(Keys.OemCloseBrackets, "[", 1),
             new(Keys.Enter, "Ent", 2.5f),
@@ -287,7 +312,7 @@ internal sealed class KeyboardTestView : UserControl
         yield return
         [
             new(Keys.CapsLock, "Caps", 1.8f),
-            .. "ASDFGHJKL".Select(letter => new KeyDefinition((Keys)Enum.Parse(typeof(Keys), letter.ToString()), letter.ToString(), 1)),
+            .. LetterKeys("ASDFGHJKL"),
             new(Keys.OemSemicolon, ";", 1),
             new(Keys.OemQuotes, ":", 1),
             new(Keys.OemBackslash, "]", 1),
@@ -296,7 +321,7 @@ internal sealed class KeyboardTestView : UserControl
         yield return
         [
             new(Keys.LShiftKey, "Shift", 2.3f),
-            .. "ZXCVBNM".Select(letter => new KeyDefinition((Keys)Enum.Parse(typeof(Keys), letter.ToString()), letter.ToString(), 1)),
+            .. LetterKeys("ZXCVBNM"),
             new(Keys.Oemcomma, ",", 1),
             new(Keys.OemPeriod, ".", 1),
             new(Keys.OemQuestion, "/", 1),
@@ -320,6 +345,75 @@ internal sealed class KeyboardTestView : UserControl
             new(Keys.RControlKey, "Ctrl", 1.2f),
         ];
     }
+
+    private static IEnumerable<KeyDefinition[]> AnsiRows()
+    {
+        yield return FunctionRow();
+
+        yield return
+        [
+            new(Keys.Oemtilde, "~", 1),
+            .. NumberKeys(),
+            new(Keys.OemMinus, "-", 1),
+            new(Keys.Oemplus, "=", 1),
+            new(Keys.Back, "Bksp", 2),
+        ];
+
+        yield return
+        [
+            new(Keys.Tab, "Tab", 1.5f),
+            .. LetterKeys("QWERTYUIOP"),
+            new(Keys.OemOpenBrackets, "[", 1),
+            new(Keys.OemCloseBrackets, "]", 1),
+            new(Keys.OemPipe, "\\", 1.5f),
+            new(Keys.Enter, "Ent", 2),
+        ];
+
+        yield return
+        [
+            new(Keys.CapsLock, "Caps", 1.8f),
+            .. LetterKeys("ASDFGHJKL"),
+            new(Keys.OemSemicolon, ";", 1),
+            new(Keys.OemQuotes, "'", 1),
+        ];
+
+        yield return
+        [
+            new(Keys.LShiftKey, "Shift", 2.3f),
+            .. LetterKeys("ZXCVBNM"),
+            new(Keys.Oemcomma, ",", 1),
+            new(Keys.OemPeriod, ".", 1),
+            new(Keys.OemQuestion, "/", 1),
+            new(Keys.RShiftKey, "Shift", 2.3f),
+        ];
+
+        yield return
+        [
+            new(Keys.LControlKey, "Ctrl", 1.5f),
+            new(Keys.LWin, "Win", 1),
+            new(Keys.LMenu, "Alt", 1.5f),
+            new(Keys.Space, "Space", 6.5f),
+            new(Keys.RMenu, "Alt", 1.5f),
+            new(Keys.RWin, "Win", 1),
+            new(Keys.Apps, "Men", 1),
+            new(Keys.RControlKey, "Ctrl", 1.5f),
+        ];
+    }
+
+    private static KeyDefinition[] FunctionRow() =>
+    [
+        new(Keys.Escape, "Esc", 1),
+        .. Enumerable.Range(1, 12).Select(index => new KeyDefinition((Keys)((int)Keys.F1 + index - 1), $"F{index}", 1)),
+        new(Keys.PrintScreen, "Prt", 1),
+        new(Keys.Scroll, "Scr", 1),
+        new(Keys.Pause, "Pau", 1),
+    ];
+
+    private static IEnumerable<KeyDefinition> NumberKeys() =>
+        Enumerable.Range(0, 10).Select(index => new KeyDefinition((Keys)((int)Keys.D0 + ((index + 1) % 10)), ((index + 1) % 10).ToString(), 1));
+
+    private static IEnumerable<KeyDefinition> LetterKeys(string letters) =>
+        letters.Select(letter => new KeyDefinition((Keys)Enum.Parse(typeof(Keys), letter.ToString()), letter.ToString(), 1));
 
     private void PaintKeys()
     {

@@ -153,6 +153,13 @@ internal static class Program
             Find<TabControl>(peripheral)?.SelectTab(2);
             Pump(300);
             Capture(peripheral, Path.Combine(folder, "keyboard.png"));
+            if (Find<KeyboardTestView>(peripheral) is { } keyboardView && Find<ComboBox>(keyboardView) is { } keyboardLayout)
+            {
+                keyboardLayout.SelectedIndex = 1;
+                Pump(300);
+                Capture(peripheral, Path.Combine(folder, "keyboard-english.png"));
+            }
+
             Find<TabControl>(peripheral)?.SelectTab(3);
             Pump(300);
             Capture(peripheral, Path.Combine(folder, "mouse.png"));
