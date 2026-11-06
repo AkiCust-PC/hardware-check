@@ -1,5 +1,6 @@
 using System.Drawing.Drawing2D;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using AkikazuHardwareCheck.Core.Diagnostics;
 using AkikazuHardwareCheck.Core.Localization;
 using AkikazuHardwareCheck.Core.Monitoring;
@@ -7,26 +8,35 @@ using AkikazuHardwareCheck.Core.Monitoring;
 namespace AkikazuHardwareCheck.App;
 
 /// <summary>
-/// A borderless performance window. Near a screen edge it is a small vertical strip; away from the edge it becomes a
-/// semi-transparent circular ball showing only the CPU/GPU temperatures. A click on the surface trims other processes.
+/// A borderless performance window. It docks to a screen edge as a neutral glass strip, or becomes a small circular
+/// glass ball away from the edge. The ball shows only CPU temperature when available and memory percentage.
 /// </summary>
 internal sealed class FloatingPerformanceForm : Form
 {
-    private const int BALL_SIZE = 132;
-    private const int STRIP_WIDTH = 220;
-    private const int STRIP_HEIGHT = 320;
+    private const int BALL_SIZE = 96;
+    private const int STRIP_WIDTH = 204;
+    private const int STRIP_HEIGHT = 268;
     private const int SNAP_DISTANCE = 28;
     private const int DRAG_THRESHOLD = 4;
+    private const int ANIMATION_INTERVAL_MS = 50;
+    private const int SAMPLE_INTERVAL_MS = 1000;
+    private const int CLICK_DELAY_MS = 240;
 
     private readonly Translator _t;
     private readonly Func<LiveSnapshot> _readSnapshot;
-    private readonly System.Windows.Forms.Timer _timer = new() { Interval = 1000 };
+    private readonly System.Windows.Forms.Timer _sampleTimer = new() { Interval = SAMPLE_INTERVAL_MS };
+    private readonly System.Windows.Forms.Timer _animationTimer = new() { Interval = ANIMATION_INTERVAL_MS };
+    private readonly System.Windows.Forms.Timer _clickTimer = new() { Interval = CLICK_DELAY_MS };
+    private readonly ContextMenuStrip _menu = new();
     private Point _dragCursor;
     private Point _dragStart;
     private bool _dragging;
     private bool _dragMoved;
     private bool _snapped = true;
+    private bool _infoVisible = true;
     private bool _cleaning;
+    private bool _clickPending;
+    private double _animationPhase;
     private LiveSnapshot? _sample;
     private string? _status;
     private DateTimeOffset _statusUntil;
@@ -42,23 +52,68 @@ internal sealed class FloatingPerformanceForm : Form
         ShowInTaskbar = false;
         TopMost = true;
         StartPosition = FormStartPosition.Manual;
-        BackColor = Color.FromArgb(18, 23, 30);
+        BackColor = SystemColors.Window;
         DoubleBuffered = true;
         ClientSize = new Size(BALL_SIZE, BALL_SIZE);
-        SetStyle(ControlStyles.SupportsTransparentBackColor, true);
+        SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
 
-        _timer.Tick += (_, _) => RefreshSample();
+        BuildMenu();
+        _sampleTimer.Tick += (_, _) => RefreshSample();
+        _animationTimer.Tick += (_, _) =>
+        {
+            _animationPhase += 0.16;
+            Invalidate();
+        };
+        _clickTimer.Tick += (_, _) =>
+        {
+            _clickTimer.Stop();
+            _clickPending = false;
+            _infoVisible = !_infoVisible;
+            Invalidate();
+        };
         Shown += (_, _) =>
         {
             ApplyMode();
             SnapToNearestEdge(force: true);
             RefreshSample();
-            _timer.Start();
+            _sampleTimer.Start();
+            _animationTimer.Start();
         };
-        FormClosed += (_, _) => _timer.Dispose();
+        VisibleChanged += (_, _) =>
+        {
+            if (Visible)
+            {
+                _sampleTimer.Start();
+                _animationTimer.Start();
+            }
+            else
+            {
+                _sampleTimer.Stop();
+                _animationTimer.Stop();
+            }
+        };
+        FormClosed += (_, _) =>
+        {
+            _sampleTimer.Dispose();
+            _animationTimer.Dispose();
+            _clickTimer.Dispose();
+            _menu.Dispose();
+        };
+
         MouseDown += BeginDrag;
         MouseMove += MoveDrag;
         MouseUp += EndDrag;
+    }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        Glass.Enable(Handle);
+    }
+
+    protected override void OnPaintBackground(PaintEventArgs e)
+    {
+        // The desktop is allowed to show through the glass; the shape is drawn in OnPaint.
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -74,6 +129,22 @@ internal sealed class FloatingPerformanceForm : Form
         {
             DrawBall(e.Graphics);
         }
+    }
+
+    private void BuildMenu()
+    {
+        AddMenuItem(_t["floating.dockLeft"], () => DockTo(left: true));
+        AddMenuItem(_t["floating.dockRight"], () => DockTo(left: false));
+        AddMenuItem(_t["floating.undock"], Undock);
+        _menu.Items.Add(new ToolStripSeparator());
+        AddMenuItem(_t["floating.hide"], Hide);
+    }
+
+    private void AddMenuItem(string text, Action action)
+    {
+        var item = new ToolStripMenuItem(text);
+        item.Click += (_, _) => action();
+        _menu.Items.Add(item);
     }
 
     private void RefreshSample()
@@ -93,7 +164,7 @@ internal sealed class FloatingPerformanceForm : Form
             ? new Size(DpiScale(STRIP_WIDTH), DpiScale(STRIP_HEIGHT))
             : new Size(DpiScale(BALL_SIZE), DpiScale(BALL_SIZE));
         ClientSize = size;
-        Opacity = _snapped ? 0.94 : 0.86;
+        Opacity = _snapped ? 0.94 : 0.82;
         if (_snapped)
         {
             Region?.Dispose();
@@ -121,70 +192,102 @@ internal sealed class FloatingPerformanceForm : Form
         var bounds = new Rectangle(1, 1, Math.Max(1, ClientSize.Width - 3), Math.Max(1, ClientSize.Height - 3));
         using var path = new GraphicsPath();
         path.AddEllipse(bounds);
-        using var fill = new LinearGradientBrush(bounds, Color.FromArgb(235, 43, 55, 72), Color.FromArgb(240, 16, 22, 31), 45f);
-        graphics.FillPath(fill, path);
-        using var border = new Pen(Color.FromArgb(110, 255, 255, 255), 1f);
-        graphics.DrawPath(border, path);
+        DrawGlass(graphics, path, bounds);
 
-        using var labelFont = new Font(Font.FontFamily, 8.5f, FontStyle.Regular);
-        using var valueFont = new Font(Font.FontFamily, 17f, FontStyle.Bold);
-        using var white = new SolidBrush(Color.White);
-        using var muted = new SolidBrush(Color.FromArgb(190, 220, 228, 238));
+        var text = SystemColors.ControlText;
+        using var textBrush = new SolidBrush(text);
+        using var mutedBrush = new SolidBrush(Color.FromArgb(170, text));
+        using var valueFont = new Font(Font.FontFamily, 11f, FontStyle.Bold);
         using var centered = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
 
-        var labelRect = new RectangleF(0, ClientSize.Height * 0.24f, ClientSize.Width, ClientSize.Height * 0.2f);
-        graphics.DrawString(_t["floating.ballLabel"], labelFont, muted, labelRect, centered);
+        var cpu = _sample?.CpuTemperature;
+        if (_infoVisible)
+        {
+            var rows = new List<(string Label, string Value)>();
+            if (cpu is { } temperature)
+            {
+                rows.Add(("CPU", $"{temperature.ToString("0", CultureInfo.InvariantCulture)}°C"));
+            }
 
-        var temperature = TemperaturePair(_sample?.CpuTemperature, _sample?.GpuTemperature);
-        var valueRect = new RectangleF(0, ClientSize.Height * 0.42f, ClientSize.Width, ClientSize.Height * 0.32f);
-        graphics.DrawString(temperature, valueFont, white, valueRect, centered);
+            if (_sample?.MemoryLoad is { } memory)
+            {
+                rows.Add((_t["floating.memoryShort"], $"{memory.ToString("0", CultureInfo.InvariantCulture)}%"));
+            }
+
+            if (rows.Count > 0)
+            {
+                var rowHeight = ClientSize.Height / (float)(rows.Count + 1);
+                for (var index = 0; index < rows.Count; index++)
+                {
+                    var y = (index + 1) * rowHeight;
+                    var line = $"{rows[index].Label} {rows[index].Value}";
+                    graphics.DrawString(line, valueFont, textBrush, new RectangleF(0, y - (rowHeight / 2), ClientSize.Width, rowHeight), centered);
+                }
+            }
+        }
 
         if (_cleaning)
         {
-            using var small = new Font(Font.FontFamily, 8f, FontStyle.Regular);
-            graphics.DrawString(_t["floating.cleaning"], small, muted, new RectangleF(0, ClientSize.Height * 0.72f, ClientSize.Width, ClientSize.Height * 0.18f), centered);
+            using var cleaningFont = new Font(Font.FontFamily, 7.5f, FontStyle.Regular);
+            graphics.DrawString(_t["floating.cleaning"], cleaningFont, mutedBrush, new RectangleF(0, ClientSize.Height * 0.78f, ClientSize.Width, ClientSize.Height * 0.16f), centered);
         }
     }
 
     private void DrawStrip(Graphics graphics)
     {
         var bounds = new Rectangle(1, 1, Math.Max(1, ClientSize.Width - 3), Math.Max(1, ClientSize.Height - 3));
-        using var path = RoundedRect(bounds, DpiScale(12));
-        using var fill = new LinearGradientBrush(bounds, Color.FromArgb(238, 36, 44, 58), Color.FromArgb(240, 15, 20, 28), 90f);
-        graphics.FillPath(fill, path);
-        using var border = new Pen(Color.FromArgb(95, 255, 255, 255), 1f);
-        graphics.DrawPath(border, path);
+        using var path = RoundedRect(bounds, DpiScale(11));
+        DrawGlass(graphics, path, bounds);
 
-        using var titleFont = new Font(Font.FontFamily, 9f, FontStyle.Bold);
-        using var labelFont = new Font(Font.FontFamily, 8f, FontStyle.Regular);
-        using var valueFont = new Font(Font.FontFamily, 13f, FontStyle.Bold);
-        using var white = new SolidBrush(Color.White);
-        using var muted = new SolidBrush(Color.FromArgb(190, 220, 228, 238));
+        var text = SystemColors.ControlText;
+        using var titleFont = new Font(Font.FontFamily, 8.5f, FontStyle.Bold);
+        using var labelFont = new Font(Font.FontFamily, 7.5f, FontStyle.Regular);
+        using var valueFont = new Font(Font.FontFamily, 11f, FontStyle.Bold);
+        using var valueBrush = new SolidBrush(text);
+        using var mutedBrush = new SolidBrush(Color.FromArgb(170, text));
         using var left = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center };
         using var right = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center };
+        var padding = DpiScale(12);
+        if (_infoVisible)
+        {
+            graphics.DrawString(_t["floating.title"], titleFont, valueBrush, new RectangleF(padding, DpiScale(10), ClientSize.Width - (padding * 2), DpiScale(20)));
+            var y = DpiScale(44);
+            if (_sample?.CpuTemperature is { } cpu)
+            {
+                DrawRow(graphics, "CPU", $"{cpu.ToString("0", CultureInfo.InvariantCulture)}°C", labelFont, valueFont, valueBrush, mutedBrush, left, right, padding, ref y);
+            }
 
-        var padding = DpiScale(14);
-        graphics.DrawString(_t["floating.title"], titleFont, white, new RectangleF(padding, DpiScale(12), ClientSize.Width - (padding * 2), DpiScale(20)));
-        var y = DpiScale(49);
-        DrawRow(graphics, _t["floating.cpuTemperature"], Temperature(_sample?.CpuTemperature), labelFont, valueFont, white, muted, left, right, padding, ref y);
-        DrawRow(graphics, _t["floating.gpuTemperature"], Temperature(_sample?.GpuTemperature), labelFont, valueFont, white, muted, left, right, padding, ref y);
-        DrawRow(graphics, _t["floating.cpuLoad"], Percent(_sample?.CpuLoad), labelFont, valueFont, white, muted, left, right, padding, ref y);
-        DrawRow(graphics, _t["floating.gpuLoad"], Percent(_sample?.GpuLoad), labelFont, valueFont, white, muted, left, right, padding, ref y);
-        DrawRow(graphics, _t["floating.memory"], Percent(_sample?.MemoryLoad), labelFont, valueFont, white, muted, left, right, padding, ref y);
+            if (_sample?.MemoryLoad is { } memory)
+            {
+                DrawRow(graphics, _t["floating.memoryShort"], $"{memory.ToString("0", CultureInfo.InvariantCulture)}%", labelFont, valueFont, valueBrush, mutedBrush, left, right, padding, ref y);
+            }
+        }
 
-        using var hintFont = new Font(Font.FontFamily, 8f, FontStyle.Regular);
-        graphics.DrawString(_t["floating.clickHint"], hintFont, muted, new RectangleF(padding, ClientSize.Height - DpiScale(34), ClientSize.Width - (padding * 2), DpiScale(22)), new StringFormat { Alignment = StringAlignment.Center });
+        using var hintFont = new Font(Font.FontFamily, 7.5f, FontStyle.Regular);
+        graphics.DrawString(_t["floating.clickHint"], hintFont, mutedBrush, new RectangleF(padding, ClientSize.Height - DpiScale(25), ClientSize.Width - (padding * 2), DpiScale(18)), new StringFormat { Alignment = StringAlignment.Center });
         if (_status is not null)
         {
-            graphics.DrawString(_status, hintFont, white, new RectangleF(padding, ClientSize.Height - DpiScale(56), ClientSize.Width - (padding * 2), DpiScale(20)), new StringFormat { Alignment = StringAlignment.Center });
+            graphics.DrawString(_status, hintFont, valueBrush, new RectangleF(padding, ClientSize.Height - DpiScale(45), ClientSize.Width - (padding * 2), DpiScale(18)), new StringFormat { Alignment = StringAlignment.Center });
         }
     }
 
-    private void DrawRow(Graphics graphics, string label, string value, Font labelFont, Font valueFont, Brush white, Brush muted, StringFormat left, StringFormat right, int padding, ref int y)
+    private void DrawGlass(Graphics graphics, GraphicsPath path, Rectangle bounds)
     {
-        var rowHeight = DpiScale(34);
-        graphics.DrawString(label, labelFont, muted, new RectangleF(padding, y, ClientSize.Width - (padding * 2), rowHeight), left);
-        graphics.DrawString(value, valueFont, white, new RectangleF(padding, y, ClientSize.Width - (padding * 2), rowHeight), right);
+        var tint = Application.IsDarkModeEnabled ? Color.FromArgb(86, 18, 22, 28) : Color.FromArgb(100, 255, 255, 255);
+        using var fill = new SolidBrush(tint);
+        graphics.FillPath(fill, path);
+        var pulse = (float)((Math.Sin(_animationPhase) + 1) / 2);
+        using var ring = new Pen(Color.FromArgb((int)(42 + (pulse * 36)), SystemColors.ControlText), 1.2f);
+        graphics.DrawPath(ring, path);
+        using var inner = new Pen(Color.FromArgb(36, 255, 255, 255), 1f);
+        graphics.DrawPath(inner, path);
+    }
+
+    private void DrawRow(Graphics graphics, string label, string value, Font labelFont, Font valueFont, Brush valueBrush, Brush mutedBrush, StringFormat left, StringFormat right, int padding, ref int y)
+    {
+        var rowHeight = DpiScale(27);
+        graphics.DrawString(label, labelFont, mutedBrush, new RectangleF(padding, y, ClientSize.Width - (padding * 2), rowHeight), left);
+        graphics.DrawString(value, valueFont, valueBrush, new RectangleF(padding, y, ClientSize.Width - (padding * 2), rowHeight), right);
         y += rowHeight;
     }
 
@@ -204,6 +307,11 @@ internal sealed class FloatingPerformanceForm : Form
     {
         if (e.Button != MouseButtons.Left)
         {
+            if (e.Button == MouseButtons.Right)
+            {
+                _menu.Show(this, e.Location);
+            }
+
             return;
         }
 
@@ -244,7 +352,25 @@ internal sealed class FloatingPerformanceForm : Form
             return;
         }
 
-        _ = CleanMemoryAsync();
+        if (e.Button != MouseButtons.Left)
+        {
+            return;
+        }
+
+        // Wait for a possible second click: a single click toggles the information, a double click cleans memory.
+        if (e.Clicks >= 2)
+        {
+            _clickTimer.Stop();
+            _clickPending = false;
+            _ = CleanMemoryAsync();
+            return;
+        }
+
+        if (!_clickPending)
+        {
+            _clickPending = true;
+            _clickTimer.Start();
+        }
     }
 
     private void SnapToNearestEdge(bool force = false)
@@ -260,8 +386,22 @@ internal sealed class FloatingPerformanceForm : Form
             return;
         }
 
-        Left = rightDistance <= leftDistance ? screen.Right - Width : screen.Left;
+        DockTo(rightDistance <= leftDistance);
+    }
+
+    private void DockTo(bool left)
+    {
+        var screen = Screen.FromControl(this).WorkingArea;
+        _snapped = true;
+        ApplyMode();
+        Left = left ? screen.Left : screen.Right - Width;
         Top = Math.Clamp(Top, screen.Top, Math.Max(screen.Top, screen.Bottom - Height));
+    }
+
+    private void Undock()
+    {
+        _snapped = false;
+        ApplyMode();
     }
 
     private async Task CleanMemoryAsync()
@@ -298,15 +438,76 @@ internal sealed class FloatingPerformanceForm : Form
 
     private int DpiScale(int logical) => (int)Math.Round(logical * DeviceDpi / 96d);
 
-    private static string Temperature(double? value) =>
-        value is { } number ? $"{number.ToString("0.#", CultureInfo.InvariantCulture)} °C" : "—";
+    private static class Glass
+    {
+        private const int DWMWA_SYSTEMBACKDROP_TYPE = 38;
+        private const int DWMSBT_TRANSIENTWINDOW = 3;
+        private const int WCA_ACCENT_POLICY = 19;
+        private const int ACCENT_ENABLE_ACRYLICBLURBEHIND = 4;
 
-    private static string Percent(double? value) =>
-        value is { } number ? $"{number.ToString("0", CultureInfo.InvariantCulture)}%" : "—";
+        public static void Enable(IntPtr handle)
+        {
+            var backdrop = DWMSBT_TRANSIENTWINDOW;
+            DwmSetWindowAttribute(handle, DWMWA_SYSTEMBACKDROP_TYPE, ref backdrop, sizeof(int));
+            var margins = new Margins { Left = -1, Right = -1, Top = -1, Bottom = -1 };
+            DwmExtendFrameIntoClientArea(handle, ref margins);
 
-    private static string TemperaturePair(double? cpu, double? gpu) =>
-        $"{ShortTemperature(cpu)}/{ShortTemperature(gpu)}°C";
+            var accent = new AccentPolicy
+            {
+                AccentState = ACCENT_ENABLE_ACRYLICBLURBEHIND,
+                AccentFlags = 2,
+                GradientColor = 0x01000000,
+            };
+            var data = new CompositionData
+            {
+                Attribute = WCA_ACCENT_POLICY,
+                Data = Marshal.AllocHGlobal(Marshal.SizeOf<AccentPolicy>()),
+                Size = Marshal.SizeOf<AccentPolicy>(),
+            };
+            try
+            {
+                Marshal.StructureToPtr(accent, data.Data, false);
+                SetWindowCompositionAttribute(handle, ref data);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(data.Data);
+            }
+        }
 
-    private static string ShortTemperature(double? value) =>
-        value is { } number ? number.ToString("0", CultureInfo.InvariantCulture) : "—";
+        [StructLayout(LayoutKind.Sequential)]
+        private struct Margins
+        {
+            public int Left;
+            public int Right;
+            public int Top;
+            public int Bottom;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct AccentPolicy
+        {
+            public int AccentState;
+            public int AccentFlags;
+            public int GradientColor;
+            public int AnimationId;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct CompositionData
+        {
+            public int Attribute;
+            public IntPtr Data;
+            public int Size;
+        }
+
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);
+
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmExtendFrameIntoClientArea(IntPtr window, ref Margins margins);
+
+        [DllImport("user32.dll")]
+        private static extern int SetWindowCompositionAttribute(IntPtr window, ref CompositionData data);
+    }
 }
