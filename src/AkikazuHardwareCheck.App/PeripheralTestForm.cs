@@ -6,8 +6,8 @@ using AkikazuHardwareCheck.Core.Models;
 namespace AkikazuHardwareCheck.App;
 
 /// <summary>
-/// Groups the subjective peripheral checks in one window. Display, keyboard, mouse and touchpad results need a person
-/// to confirm them; only the gamepad state is read automatically. Nothing is written to the hardware.
+/// Groups the subjective peripheral checks in one window. Display, keyboard and mouse results need a person to confirm
+/// them; only the gamepad state is read automatically. Nothing is written to the hardware.
 /// </summary>
 internal sealed class PeripheralTestForm : Form
 {

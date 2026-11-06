@@ -4,14 +4,15 @@ using AkikazuHardwareCheck.Core.Localization;
 namespace AkikazuHardwareCheck.App;
 
 /// <summary>
-/// Mouse and touchpad test: every button, both wheel axes, pinch zoom, double-click chatter, polling estimate and an
-/// optional movement trail. The trail is drawn because Windows has no native control that records a pointer path.
+/// Mouse test: every button, both wheel axes, pinch zoom, double-click chatter, polling estimate and an optional
+/// movement trail. The trail is drawn because Windows has no native control that records a pointer path.
 /// </summary>
 internal sealed class MouseTestView : UserControl
 {
     private const int CHATTER_THRESHOLD_MS = 80;
     private const int POLLING_WINDOW_MS = 500;
     private const int TRAIL_WIDTH = 2;
+    private const int MAX_TRAIL_POINTS = 512;
     private const uint WM_MOUSEHWHEEL = 0x020E;
 
     private readonly Translator _t;
@@ -283,7 +284,16 @@ internal sealed class MouseTestView : UserControl
         public MouseTrail()
         {
             TabStop = true;
-            SetStyle(ControlStyles.Selectable, true);
+            // The trail repaints on every pointer sample. Without a composited buffer the white background is
+            // cleared and redrawn separately, which looks like a flash on each move.
+            SetStyle(
+                ControlStyles.Selectable |
+                ControlStyles.UserPaint |
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.ResizeRedraw,
+                true);
+            DoubleBuffered = true;
         }
 
         protected override void OnMouseDown(MouseEventArgs e)
@@ -331,6 +341,11 @@ internal sealed class MouseTestView : UserControl
             if (ShowTrail)
             {
                 _points.Add(e.Location);
+                if (_points.Count > MAX_TRAIL_POINTS)
+                {
+                    _points.RemoveRange(0, _points.Count - MAX_TRAIL_POINTS);
+                }
+
                 Invalidate();
             }
         }
