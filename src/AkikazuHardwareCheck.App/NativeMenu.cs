@@ -18,6 +18,7 @@ internal enum MenuCommand
     Exit,
     AdvancedInfo,
     Maintenance,
+    JunkCleanup,
     NetworkSpeedTest,
     DisplayInfo,
     CameraTest,

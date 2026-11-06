@@ -491,6 +491,7 @@ internal sealed class MainForm : Form
         menu.Items.Add(_trayCrosshairItem);
         menu.Items.Add(Item(_t["tray.chart"], (_, _) => ShowLiveChart()));
         menu.Items.Add(Item(_t["tray.diagnostic"], (_, _) => ShowMaintenance()));
+        menu.Items.Add(Item(_t["ui.junkCleanup"], (_, _) => ShowJunkCleanup()));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(Item(_t["tray.settings"], (_, _) => OpenSettingsForm()));
         menu.Items.Add(new ToolStripSeparator());
@@ -919,6 +920,7 @@ internal sealed class MainForm : Form
         NativeMenu.AddSeparator(tools);
         NativeMenu.AddItem(tools, MenuCommand.AdvancedInfo, _t["ui.advancedInfo"]);
         NativeMenu.AddItem(tools, MenuCommand.Maintenance, _t["ui.maintenance"]);
+        NativeMenu.AddItem(tools, MenuCommand.JunkCleanup, _t["ui.junkCleanup"]);
         NativeMenu.AddItem(tools, MenuCommand.NetworkSpeedTest, _t["networkTest.title"]);
         NativeMenu.AddItem(tools, MenuCommand.DisplayInfo, _t["displayInfo.title"]);
         NativeMenu.AddItem(tools, MenuCommand.CameraTest, _t["cameraTest.title"]);
@@ -1005,6 +1007,9 @@ internal sealed class MainForm : Form
                 break;
             case MenuCommand.Maintenance:
                 ShowMaintenance();
+                break;
+            case MenuCommand.JunkCleanup:
+                ShowJunkCleanup();
                 break;
             case MenuCommand.NetworkSpeedTest:
                 using (var form = new NetworkSpeedTestForm(_t, Font))
