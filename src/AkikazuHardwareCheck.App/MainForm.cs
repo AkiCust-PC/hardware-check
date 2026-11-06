@@ -1669,8 +1669,8 @@ internal sealed class MainForm : Form
         _activitySnapshot = snapshot;
         ShowUsage(_memoryLoadTile, Format(snapshot.MemoryLoadPercent, "0", "%"), snapshot.MemoryLoadPercent / PERCENT);
         ShowUsage(_diskLoadTile, Format(snapshot.DiskBusyPercent, "0", "%"), snapshot.DiskBusyPercent / PERCENT);
-        ShowUsage(_uploadTile, Ui.FormatRate(snapshot.UploadBytesPerSecond), MetricLevels.LinkFraction(snapshot.UploadBytesPerSecond, _hardware?.Network));
-        ShowUsage(_downloadTile, Ui.FormatRate(snapshot.DownloadBytesPerSecond), MetricLevels.LinkFraction(snapshot.DownloadBytesPerSecond, _hardware?.Network));
+        ShowUsage(_uploadTile, Ui.FormatRate(snapshot.UploadBytesPerSecond), MetricLevels.LinkActivity(snapshot.UploadBytesPerSecond, _hardware?.Network));
+        ShowUsage(_downloadTile, Ui.FormatRate(snapshot.DownloadBytesPerSecond), MetricLevels.LinkActivity(snapshot.DownloadBytesPerSecond, _hardware?.Network));
     }
 
     private static void ShowUsage(MetricTile tile, string text, double? fraction) =>

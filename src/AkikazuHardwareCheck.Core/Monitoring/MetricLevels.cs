@@ -36,4 +36,25 @@ public static class MetricLevels
         bytesPerSecond is { } rate && network?.LinkMegabits is > 0
             ? rate * BITS_PER_BYTE / (network.LinkMegabits.Value * BITS_PER_MEGABIT)
             : null;
+
+    /// <summary>
+    /// Network activity for the bar. A linear share of a gigabit link leaves ordinary traffic at zero pixels, so the
+    /// bar uses a logarithmic scale of that same link-speed share; the text still shows the real bytes per second.
+    /// Null means no link speed was read, and the caller keeps an empty track.
+    /// </summary>
+    public static double? LinkActivity(double? bytesPerSecond, NetworkConnection? network)
+    {
+        if (bytesPerSecond is not { } rate || network?.LinkMegabits is not > 0)
+        {
+            return null;
+        }
+
+        if (rate <= 0)
+        {
+            return 0;
+        }
+
+        var linkBytesPerSecond = network.LinkMegabits.Value * BITS_PER_MEGABIT / BITS_PER_BYTE;
+        return Math.Clamp(Math.Log10(1 + rate) / Math.Log10(1 + linkBytesPerSecond), 0, 1);
+    }
 }

@@ -43,4 +43,15 @@ public class MetricLevelsTests
         Assert.Null(MetricLevels.LinkFraction(null, gigabit));
         Assert.Null(MetricLevels.LinkFraction(1000, new NetworkConnection(NetworkKind.None, null, null)));
     }
+
+    [Fact]
+    public void SmallTrafficStillMovesTheNetworkBar()
+    {
+        var wifi = new NetworkConnection(NetworkKind.WiFi, "x", 2882);
+
+        Assert.True(MetricLevels.LinkActivity(2_000, wifi) > 0.2);
+        Assert.Equal(0, MetricLevels.LinkActivity(0, wifi));
+        Assert.Null(MetricLevels.LinkActivity(null, wifi));
+        Assert.Null(MetricLevels.LinkActivity(1000, new NetworkConnection(NetworkKind.None, null, null)));
+    }
 }
