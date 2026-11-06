@@ -2,6 +2,7 @@ using System.Drawing.Imaging;
 using AkikazuHardwareCheck.App;
 using AkikazuHardwareCheck.Core.Configuration;
 using AkikazuHardwareCheck.Core.Localization;
+using AkikazuHardwareCheck.Core.Models;
 using AkikazuHardwareCheck.Core.Monitoring;
 
 namespace AkikazuHardwareCheck.App.SmokeTests;
@@ -40,6 +41,8 @@ internal static class Program
                 using var maintenance = new MaintenanceForm(t, font);
                 using var disk = new DiskTestForm(t, font);
                 using var junk = new JunkCleanupForm(t, font);
+                using var peripheral = new PeripheralTestForm(t, MinimalHardware(), new AudioCheckResult(null, null), font);
+                using var displayTest = new DisplayTestForm(t, Screen.PrimaryScreen!);
             }
             catch (Exception exception)
             {
@@ -141,9 +144,40 @@ internal static class Program
             Capture(junk, Path.Combine(folder, "junk-cleanup.png"));
         }
 
+        var hardware = MinimalHardware();
+        using (var peripheral = new PeripheralTestForm(t, hardware, new AudioCheckResult(null, null), font))
+        {
+            peripheral.TopMost = true;
+            peripheral.Show();
+            Pump(500);
+            Find<TabControl>(peripheral)?.SelectTab(2);
+            Pump(300);
+            Capture(peripheral, Path.Combine(folder, "keyboard.png"));
+            Find<TabControl>(peripheral)?.SelectTab(3);
+            Pump(300);
+            Capture(peripheral, Path.Combine(folder, "mouse.png"));
+        }
+
+        using (var display = new DisplayTestForm(t, Screen.PrimaryScreen!))
+        {
+            display.Show();
+            Pump(800);
+            Capture(display, Path.Combine(folder, "display-test.png"));
+            display.ShowForSmoke(7);
+            Pump(400);
+            Capture(display, Path.Combine(folder, "display-color-distance.png"));
+            display.ShowForSmoke(12);
+            Pump(400);
+            Capture(display, Path.Combine(folder, "display-response.png"));
+        }
+
         Console.WriteLine($"Screenshots written to {Path.GetFullPath(folder)}");
         return 0;
     }
+
+    private static HardwareInventory MinimalHardware() => new(
+        new ProbeEnvironment(null, WindowsActivation.Unknown, false, false),
+        [], [], null, null, [], [], []);
 
     private static void Pump(int milliseconds)
     {

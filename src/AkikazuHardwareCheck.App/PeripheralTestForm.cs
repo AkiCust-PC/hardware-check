@@ -13,9 +13,9 @@ internal sealed class PeripheralTestForm : Form
 {
     private readonly Translator _t;
     private readonly HardwareInventory _hardware;
-    private readonly CheckedListBox _keys = new() { Dock = DockStyle.Fill, CheckOnClick = true, IntegralHeight = false };
-    private readonly Label _keyCount = Ui.Label();
-    private readonly Label _mouseStatus = Ui.Label();
+    private readonly KeyboardTestView _keyboard;
+    private readonly MouseTestView _mouse;
+    private readonly TabControl _tabs;
     private readonly Label _gamepadStatus = Ui.Label();
     private readonly Label _gamepadButtons = Ui.Label();
     private readonly Label _gamepadTriggers = Ui.Label();
@@ -25,18 +25,14 @@ internal sealed class PeripheralTestForm : Form
     private readonly Label _microphoneStatus = Ui.Label();
     private readonly System.Windows.Forms.Timer _gamepadTimer = new() { Interval = 50 };
     private AudioCheckResult _audio;
-    private int _leftClicks;
-    private int _rightClicks;
-    private int _middleClicks;
-    private int _x1Clicks;
-    private int _x2Clicks;
-    private int _wheelDelta;
 
     public PeripheralTestForm(Translator t, HardwareInventory hardware, AudioCheckResult audio, Font font)
     {
         _t = t;
         _hardware = hardware;
         _audio = audio;
+        _keyboard = new KeyboardTestView(t, font);
+        _mouse = new MouseTestView(t, font);
         Font = font;
         Icon = Ui.AppIcon;
         Text = t["peripheralTest.title"];
@@ -45,12 +41,12 @@ internal sealed class PeripheralTestForm : Form
         MinimumSize = new Size(LogicalToDeviceUnits(700), LogicalToDeviceUnits(520));
         KeyPreview = true;
 
-        var tabs = new TabControl { Dock = DockStyle.Fill };
-        tabs.TabPages.Add(BuildAudioPage());
-        tabs.TabPages.Add(BuildDisplayPage());
-        tabs.TabPages.Add(BuildKeyboardPage());
-        tabs.TabPages.Add(BuildMousePage());
-        tabs.TabPages.Add(BuildGamepadPage());
+        _tabs = new TabControl { Dock = DockStyle.Fill };
+        _tabs.TabPages.Add(BuildAudioPage());
+        _tabs.TabPages.Add(BuildDisplayPage());
+        _tabs.TabPages.Add(BuildKeyboardPage());
+        _tabs.TabPages.Add(BuildMousePage());
+        _tabs.TabPages.Add(BuildGamepadPage());
 
         var close = Ui.Button();
         close.Text = t["ui.ok"];
@@ -63,17 +59,17 @@ internal sealed class PeripheralTestForm : Form
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.Controls.Add(tabs, 0, 0);
+        root.Controls.Add(_tabs, 0, 0);
         root.Controls.Add(buttons, 0, 1);
         Controls.Add(root);
         AcceptButton = close;
         CancelButton = close;
 
         KeyDown += OnKeyDown;
+        KeyUp += (_, e) => _keyboard.MarkKeyUp(e.KeyCode);
         _gamepadTimer.Tick += (_, _) => PollGamepad();
         Shown += (_, _) => _gamepadTimer.Start();
         Ui.ScaleButtons(this);
-        BuildKeyList();
         UpdateAudioLabels();
     }
 
@@ -185,84 +181,11 @@ internal sealed class PeripheralTestForm : Form
         return page;
     }
 
-    private TabPage BuildKeyboardPage()
-    {
-        var page = new TabPage(_t["peripheralTest.keyboard"]) { Padding = new Padding(Ui.SPACING), UseVisualStyleBackColor = true };
-        var hint = new Label { AutoSize = true, Text = _t["peripheralTest.pressKeys"], Margin = new Padding(0, 0, 0, Ui.SPACING) };
-        var clear = Ui.Button();
-        clear.Text = _t["peripheralTest.clear"];
-        clear.Click += (_, _) =>
-        {
-            for (var index = 0; index < _keys.Items.Count; index++)
-            {
-                _keys.SetItemChecked(index, false);
-            }
+    private TabPage BuildKeyboardPage() =>
+        new(_t["peripheralTest.keyboard"]) { Padding = new Padding(Ui.SPACING), UseVisualStyleBackColor = true, Controls = { _keyboard } };
 
-            _keyCount.Text = _t["peripheralTest.keysTested", 0];
-        };
-
-        var top = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Top, WrapContents = false, Margin = new Padding(0) };
-        top.Controls.Add(clear);
-        top.Controls.Add(_keyCount);
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Margin = new Padding(0) };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.Controls.Add(hint, 0, 0);
-        layout.Controls.Add(_keys, 0, 1);
-        layout.Controls.Add(top, 0, 2);
-        page.Controls.Add(layout);
-        return page;
-    }
-
-    private TabPage BuildMousePage()
-    {
-        var page = new TabPage(_t["peripheralTest.mouse"]) { Padding = new Padding(Ui.SPACING), UseVisualStyleBackColor = true };
-        var panel = new Panel { Dock = DockStyle.Top, Height = LogicalToDeviceUnits(220), BorderStyle = BorderStyle.FixedSingle, BackColor = SystemColors.Window, TabStop = true };
-        panel.MouseDown += (_, e) =>
-        {
-            if (e.Button == MouseButtons.Left)
-            {
-                _leftClicks++;
-            }
-            else if (e.Button == MouseButtons.Right)
-            {
-                _rightClicks++;
-            }
-            else if (e.Button == MouseButtons.Middle)
-            {
-                _middleClicks++;
-            }
-            else if (e.Button == MouseButtons.XButton1)
-            {
-                _x1Clicks++;
-            }
-            else if (e.Button == MouseButtons.XButton2)
-            {
-                _x2Clicks++;
-            }
-
-            UpdateMouseStatus();
-        };
-        panel.MouseWheel += (_, e) =>
-        {
-            _wheelDelta += e.Delta;
-            UpdateMouseStatus();
-        };
-        panel.MouseMove += (_, e) => _mouseStatus.Text = $"{_t["peripheralTest.pointer"]}: {e.X}, {e.Y}";
-
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Margin = new Padding(0) };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(220)));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.Controls.Add(new Label { AutoSize = true, Text = _t["peripheralTest.mouseHelp"], MaximumSize = new Size(LogicalToDeviceUnits(740), 0), Margin = new Padding(0, 0, 0, Ui.SPACING) }, 0, 0);
-        layout.Controls.Add(panel, 0, 1);
-        layout.Controls.Add(_mouseStatus, 0, 2);
-        page.Controls.Add(layout);
-        return page;
-    }
+    private TabPage BuildMousePage() =>
+        new(_t["peripheralTest.mouse"]) { Padding = new Padding(Ui.SPACING), UseVisualStyleBackColor = true, Controls = { _mouse } };
 
     private TabPage BuildGamepadPage()
     {
@@ -301,108 +224,15 @@ internal sealed class PeripheralTestForm : Form
         layout.Controls.Add(line, 0, row);
     }
 
-    private void BuildKeyList()
-    {
-        var keys = new List<Keys>();
-        keys.AddRange(Enumerable.Range((int)Keys.A, 26).Select(value => (Keys)value));
-        keys.AddRange(Enumerable.Range((int)Keys.D0, 10).Select(value => (Keys)value));
-        keys.AddRange(Enumerable.Range((int)Keys.F1, 12).Select(value => (Keys)value));
-        keys.AddRange([Keys.Up, Keys.Down, Keys.Left, Keys.Right, Keys.Space, Keys.Enter, Keys.Back, Keys.Tab, Keys.Escape, Keys.Insert, Keys.Delete, Keys.Home, Keys.End, Keys.PageUp, Keys.PageDown, Keys.LShiftKey, Keys.RShiftKey, Keys.LControlKey, Keys.RControlKey, Keys.LMenu, Keys.RMenu]);
-        keys.AddRange([Keys.OemSemicolon, Keys.OemQuestion, Keys.Oemtilde, Keys.OemOpenBrackets, Keys.OemPipe, Keys.OemCloseBrackets, Keys.OemQuotes, Keys.OemBackslash, Keys.Oemcomma, Keys.OemPeriod, Keys.OemMinus, Keys.Oemplus]);
-        keys.AddRange([Keys.NumPad0, Keys.NumPad1, Keys.NumPad2, Keys.NumPad3, Keys.NumPad4, Keys.NumPad5, Keys.NumPad6, Keys.NumPad7, Keys.NumPad8, Keys.NumPad9, Keys.Add, Keys.Subtract, Keys.Multiply, Keys.Divide, Keys.Decimal, Keys.NumLock]);
-        keys.AddRange([Keys.CapsLock, Keys.PrintScreen, Keys.Scroll, Keys.Pause, Keys.LWin, Keys.RWin, Keys.Apps, Keys.Sleep]);
-        foreach (var key in keys.Distinct())
-        {
-            _keys.Items.Add(new KeyItem(key, KeyLabel(key)));
-        }
-
-        _keyCount.Text = _t["peripheralTest.keysTested", 0];
-    }
-
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.KeyCode == Keys.Escape)
+        if (e.KeyCode == Keys.Escape && _tabs.SelectedIndex != 2)
         {
             Close();
             return;
         }
 
-        MarkKey(e.KeyCode);
-    }
-
-    private static string KeyLabel(Keys key) => key switch
-    {
-        >= Keys.A and <= Keys.Z => key.ToString(),
-        >= Keys.D0 and <= Keys.D9 => ((char)('0' + (key - Keys.D0))).ToString(),
-        >= Keys.F1 and <= Keys.F12 => key.ToString(),
-        >= Keys.NumPad0 and <= Keys.NumPad9 => "Num " + (key - Keys.NumPad0).ToString(CultureInfo.InvariantCulture),
-        Keys.Up => "↑",
-        Keys.Down => "↓",
-        Keys.Left => "←",
-        Keys.Right => "→",
-        Keys.Space => "Space",
-        Keys.Enter => "Enter",
-        Keys.Back => "Backspace",
-        Keys.Tab => "Tab",
-        Keys.Escape => "Esc",
-        Keys.Insert => "Ins",
-        Keys.Delete => "Del",
-        Keys.Home => "Home",
-        Keys.End => "End",
-        Keys.PageUp => "PgUp",
-        Keys.PageDown => "PgDn",
-        Keys.LShiftKey => "L Shift",
-        Keys.RShiftKey => "R Shift",
-        Keys.LControlKey => "L Ctrl",
-        Keys.RControlKey => "R Ctrl",
-        Keys.LMenu => "L Alt",
-        Keys.RMenu => "R Alt",
-        Keys.LWin => "L Win",
-        Keys.RWin => "R Win",
-        Keys.OemSemicolon => ";",
-        Keys.OemQuestion => "/",
-        Keys.Oemtilde => "`",
-        Keys.OemOpenBrackets => "[",
-        Keys.OemPipe => "\\",
-        Keys.OemCloseBrackets => "]",
-        Keys.OemQuotes => "'",
-        Keys.OemBackslash => "\\",
-        Keys.Oemcomma => ",",
-        Keys.OemPeriod => ".",
-        Keys.OemMinus => "-",
-        Keys.Oemplus => "=",
-        Keys.Add => "Num +",
-        Keys.Subtract => "Num -",
-        Keys.Multiply => "Num *",
-        Keys.Divide => "Num /",
-        Keys.Decimal => "Num .",
-        Keys.NumLock => "NumLock",
-        Keys.CapsLock => "CapsLock",
-        Keys.PrintScreen => "PrtSc",
-        Keys.Scroll => "ScrollLock",
-        Keys.Pause => "Pause",
-        Keys.Apps => "Menu",
-        Keys.Sleep => "Sleep",
-        _ => key.ToString(),
-    };
-
-    private sealed record KeyItem(Keys Key, string Label)
-    {
-        public override string ToString() => Label;
-    }
-
-    private void MarkKey(Keys key)
-    {
-        for (var index = 0; index < _keys.Items.Count; index++)
-        {
-            if (_keys.Items[index] is KeyItem candidate && candidate.Key == key)
-            {
-                _keys.SetItemChecked(index, true);
-                break;
-            }
-        }
-
-        _keyCount.Text = _t["peripheralTest.keysTested", _keys.CheckedItems.Count];
+        _keyboard.MarkKeyDown(e.KeyCode);
     }
 
     protected override void OnHandleCreated(EventArgs e)
@@ -435,7 +265,7 @@ internal sealed class PeripheralTestForm : Form
                         var keyboard = Marshal.PtrToStructure<RawKeyboard>(buffer + Marshal.SizeOf<RawInputHeader>());
                         if (keyboard.Message is 0x0100 or 0x0104 && keyboard.VirtualKey is > 0 and < 0x100)
                         {
-                            MarkKey((Keys)keyboard.VirtualKey);
+                            _keyboard.MarkKeyDown((Keys)keyboard.VirtualKey);
                         }
                     }
                 }
@@ -483,11 +313,6 @@ internal sealed class PeripheralTestForm : Form
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern int GetRawInputData(IntPtr rawInput, uint command, IntPtr data, ref int size, int headerSize);
-
-    private void UpdateMouseStatus()
-    {
-        _mouseStatus.Text = _t["peripheralTest.mouseCounts", _leftClicks, _rightClicks, _middleClicks, _x1Clicks, _x2Clicks, _wheelDelta];
-    }
 
     private async Task RunSpeakerTestAsync(Button button)
     {
