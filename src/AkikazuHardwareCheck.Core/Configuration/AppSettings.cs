@@ -61,6 +61,7 @@ public sealed record AppSettings(
     bool FloatingSnapped = false,
     int FloatingEdge = 0,
     bool FloatingInfoVisible = true,
+    bool HudEnabled = false,
     bool RulerEnabled = false,
     bool CrosshairEnabled = false,
     int CrosshairShape = 1,

@@ -1,0 +1,92 @@
+using System.Globalization;
+using AkikazuHardwareCheck.Core.Localization;
+using AkikazuHardwareCheck.Core.Monitoring;
+
+namespace AkikazuHardwareCheck.App;
+
+/// <summary>A lightweight top-center transparent text strip. It only reads the existing live snapshot.</summary>
+internal sealed class GameHudForm : Form
+{
+    private readonly Translator _t;
+    private readonly Func<LiveSnapshot> _readSnapshot;
+    private readonly System.Windows.Forms.Timer _timer = new() { Interval = 1000 };
+    private LiveSnapshot? _sample;
+
+    public GameHudForm(Translator t, Func<LiveSnapshot> readSnapshot, Font font)
+    {
+        _t = t;
+        _readSnapshot = readSnapshot;
+        Font = font;
+        FormBorderStyle = FormBorderStyle.None;
+        StartPosition = FormStartPosition.Manual;
+        ShowInTaskbar = false;
+        TopMost = true;
+        AutoScaleMode = AutoScaleMode.None;
+        BackColor = Color.Fuchsia;
+        TransparencyKey = Color.Fuchsia;
+        DoubleBuffered = true;
+        var screen = Screen.PrimaryScreen?.Bounds ?? new Rectangle(0, 0, 1920, 1080);
+        Bounds = new Rectangle(screen.Left, screen.Top, screen.Width, LogicalToDeviceUnits(42));
+        _timer.Tick += (_, _) =>
+        {
+            _sample = _readSnapshot();
+            Invalidate();
+        };
+        Shown += (_, _) =>
+        {
+            _sample = _readSnapshot();
+            _timer.Start();
+        };
+        FormClosed += (_, _) => _timer.Dispose();
+    }
+
+    protected override bool ShowWithoutActivation => true;
+
+    protected override void WndProc(ref Message message)
+    {
+        if (message.Msg == 0x0084)
+        {
+            message.Result = new IntPtr(-1);
+            return;
+        }
+
+        base.WndProc(ref message);
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        if (_sample is not { } sample)
+        {
+            return;
+        }
+
+        var parts = new List<string>();
+        Add(parts, "CPU", sample.CpuLoad, "%");
+        Add(parts, string.Empty, sample.CpuTemperature, "°C");
+        Add(parts, "GPU", sample.GpuLoad, "%");
+        Add(parts, string.Empty, sample.GpuTemperature, "°C");
+        Add(parts, "MEM", sample.MemoryLoad, "%");
+        var text = string.Join("   ", parts);
+        if (text.Length == 0)
+        {
+            return;
+        }
+
+        using var font = new Font("Segoe UI", 12f, FontStyle.Bold, GraphicsUnit.Point);
+        using var shadow = new SolidBrush(Color.FromArgb(190, 0, 0, 0));
+        using var foreground = new SolidBrush(Color.White);
+        var size = e.Graphics.MeasureString(text, font);
+        var x = Math.Max(4f, (ClientSize.Width - size.Width) / 2f);
+        e.Graphics.DrawString(text, font, shadow, x + 1, 1);
+        e.Graphics.DrawString(text, font, foreground, x, 0);
+    }
+
+    private static void Add(ICollection<string> parts, string label, double? value, string unit)
+    {
+        if (value is { } number)
+        {
+            parts.Add($"{(label.Length == 0 ? string.Empty : label + " ")}{number.ToString("0", CultureInfo.InvariantCulture)}{unit}");
+        }
+    }
+}

@@ -374,6 +374,7 @@
   "settings.crosshair": "Crosshair",
   "crosshair.toggle": "Crosshair",
   "ruler.toggle": "Screen ruler",
+  "hud.toggle": "Game performance HUD",
   "crosshair.enable": "Enable crosshair",
   "crosshair.settings": "Crosshair settings",
   "crosshair.shape": "Shape",

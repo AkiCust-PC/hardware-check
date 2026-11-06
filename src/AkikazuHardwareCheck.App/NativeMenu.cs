@@ -26,6 +26,7 @@ internal enum MenuCommand
     Floating,
     Crosshair,
     ScreenRuler,
+    GameHud,
     TestWindow,
     HardwareWindow,
     Guide,

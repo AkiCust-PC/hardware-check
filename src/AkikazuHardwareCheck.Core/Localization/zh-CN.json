@@ -374,6 +374,7 @@
   "settings.crosshair": "准星",
   "crosshair.toggle": "准星",
   "ruler.toggle": "屏幕标尺",
+  "hud.toggle": "游戏性能条",
   "crosshair.enable": "启用准星",
   "crosshair.settings": "准星设置",
   "crosshair.shape": "形状",

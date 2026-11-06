@@ -141,6 +141,7 @@ internal sealed class MainForm : Form
     private FloatingPerformanceForm? _floatingForm;
     private CrosshairOverlayForm? _crosshairForm;
     private ScreenRulerOverlay? _rulerOverlay;
+    private GameHudForm? _hudForm;
     private TestWorkspaceForm? _testWorkspace;
     private bool _testWorkspaceRestoring;
     private HardwareWindowForm? _hardwareWindow;
@@ -193,6 +194,7 @@ internal sealed class MainForm : Form
         ApplyBodyWidths();
         UpdateCrosshair();
         UpdateRuler();
+        UpdateHud();
         if (_startHidden && _settings is { ShowTrayIcon: true, CloseToTray: true })
         {
             HideToTray();
@@ -297,6 +299,8 @@ internal sealed class MainForm : Form
         _crosshairForm = null;
         _rulerOverlay?.Dispose();
         _rulerOverlay = null;
+        _hudForm?.Dispose();
+        _hudForm = null;
         _activityMonitor?.Dispose();
         _sensorSource?.Dispose();
         if (_isDriverOurs)
@@ -793,6 +797,7 @@ internal sealed class MainForm : Form
         NativeMenu.AddSeparator(tools);
         NativeMenu.AddItem(tools, MenuCommand.Crosshair, _t["crosshair.toggle"]);
         NativeMenu.AddItem(tools, MenuCommand.ScreenRuler, _t["ruler.toggle"]);
+        NativeMenu.AddItem(tools, MenuCommand.GameHud, _t["hud.toggle"]);
         NativeMenu.AddItem(tools, MenuCommand.TestWindow, _t["ui.testWindow"]);
         NativeMenu.AddItem(tools, MenuCommand.HardwareWindow, _t["ui.hardwareWindow"]);
 
@@ -908,6 +913,9 @@ internal sealed class MainForm : Form
                 break;
             case MenuCommand.ScreenRuler:
                 ToggleRuler();
+                break;
+            case MenuCommand.GameHud:
+                ToggleHud();
                 break;
             case MenuCommand.TestWindow:
                 ShowTestWorkspace();
@@ -1600,6 +1608,32 @@ internal sealed class MainForm : Form
         UpdateCommandStates();
     }
 
+    private void ToggleHud()
+    {
+        SaveSettings(_settings with { HudEnabled = !_settings.HudEnabled });
+        UpdateHud();
+        UpdateCommandStates();
+    }
+
+    private void UpdateHud()
+    {
+        if (!_settings.HudEnabled)
+        {
+            _hudForm?.Dispose();
+            _hudForm = null;
+            return;
+        }
+
+        if (_hudForm is { IsDisposed: false })
+        {
+            return;
+        }
+
+        _hudForm = new GameHudForm(_t, CurrentLiveSnapshot, Font);
+        _hudForm.FormClosed += (_, _) => _hudForm = null;
+        _hudForm.Show();
+    }
+
     private void UpdateRuler()
     {
         if (!_settings.RulerEnabled)
@@ -2245,6 +2279,7 @@ internal sealed class MainForm : Form
             menu.SetChecked(MenuCommand.ShowMonitor, !_settings.IsMonitorPanelHidden);
             menu.SetChecked(MenuCommand.Crosshair, _settings.CrosshairEnabled);
             menu.SetChecked(MenuCommand.ScreenRuler, _settings.RulerEnabled);
+            menu.SetChecked(MenuCommand.GameHud, _settings.HudEnabled);
             menu.SetEnabled(MenuCommand.RestartToFirmware, !isRunning);
             for (var index = 0; index < LanguageChoices.Length; index++)
             {
