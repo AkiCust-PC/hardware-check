@@ -343,6 +343,8 @@
   "ui.saved": "レポートを保存しました: {0}",
   "ui.sensorReads": "センサー読み取り {0} 回、失敗 {1} 回",
   "ui.settings": "設定",
+  "ui.testWindow": "テストウィンドウ",
+  "ui.resultWindow": "結果ウィンドウ",
   "ui.showTrayIcon": "トレイアイコン",
   "ui.closeToTray": "閉じたらバックグラウンド",
   "ui.startWithWindows": "Windows 起動時に開始",

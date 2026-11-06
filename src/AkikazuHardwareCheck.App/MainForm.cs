@@ -140,6 +140,8 @@ internal sealed class MainForm : Form
     private LiveChartForm? _chartForm;
     private FloatingPerformanceForm? _floatingForm;
     private CrosshairOverlayForm? _crosshairForm;
+    private TestWorkspaceForm? _testWorkspace;
+    private bool _testWorkspaceRestoring;
     private ActivitySnapshot? _activitySnapshot;
     private TestRunResult? _lastRun;
     private MemoryTestResult? _memoryResult;
@@ -276,6 +278,8 @@ internal sealed class MainForm : Form
             return;
         }
 
+        _testWorkspace?.Close();
+        RestoreTestWorkspace();
         SaveWindowState();
         _windowStateTimer.Dispose();
         _clockTimer.Dispose();
@@ -772,6 +776,8 @@ internal sealed class MainForm : Form
         NativeMenu.AddItem(tools, MenuCommand.Maintenance, _t["ui.maintenance"]);
         NativeMenu.AddSeparator(tools);
         NativeMenu.AddItem(tools, MenuCommand.Crosshair, _t["crosshair.toggle"]);
+        NativeMenu.AddItem(tools, MenuCommand.TestWindow, _t["ui.testWindow"]);
+        NativeMenu.AddItem(tools, MenuCommand.ResultWindow, _t["ui.resultWindow"]);
 
         var settings = menu.AddSubmenu(_t["ui.menuSettings"]);
         NativeMenu.AddItem(settings, MenuCommand.Settings, _t["ui.settings"]);
@@ -857,6 +863,12 @@ internal sealed class MainForm : Form
                 break;
             case MenuCommand.Crosshair:
                 ToggleCrosshair();
+                break;
+            case MenuCommand.TestWindow:
+                ShowTestWorkspace(resultsOnly: false);
+                break;
+            case MenuCommand.ResultWindow:
+                ShowTestWorkspace(resultsOnly: true);
                 break;
             case MenuCommand.Exit:
                 ExitApplication();
@@ -1563,6 +1575,68 @@ internal sealed class MainForm : Form
         _crosshairForm = new CrosshairOverlayForm(CurrentCrosshair());
         _crosshairForm.FormClosed += (_, _) => _crosshairForm = null;
         _crosshairForm.Show();
+    }
+
+    private void ShowTestWorkspace(bool resultsOnly)
+    {
+        if (_testWorkspace is { IsDisposed: false } existing)
+        {
+            if (existing.WindowState == FormWindowState.Minimized)
+            {
+                existing.WindowState = FormWindowState.Normal;
+            }
+
+            existing.Activate();
+            return;
+        }
+
+        if (_controlGroup is null || _resultGroup is null)
+        {
+            return;
+        }
+
+        var form = new TestWorkspaceForm(_t, resultsOnly ? null : _controlGroup, _resultGroup, Font);
+        form.FormClosing += (_, _) => RestoreTestWorkspace();
+        form.FormClosed += (_, _) => _testWorkspace = null;
+        _testWorkspace = form;
+        if (!resultsOnly)
+        {
+            _rightPanel.RowStyles[1].Height = 0;
+        }
+
+        _rightPanel.RowStyles[2].SizeType = SizeType.Absolute;
+        _rightPanel.RowStyles[2].Height = 0;
+        ApplyBodyWidths();
+        form.Show(this);
+    }
+
+    private void RestoreTestWorkspace()
+    {
+        if (_testWorkspace is null || _testWorkspaceRestoring)
+        {
+            return;
+        }
+
+        _testWorkspaceRestoring = true;
+        try
+        {
+            if (_controlGroup is { } control && control.Parent != _rightPanel)
+            {
+                _rightPanel.Controls.Add(control, 0, 1);
+            }
+
+            if (_resultGroup is { } result && result.Parent != _rightPanel)
+            {
+                _rightPanel.Controls.Add(result, 0, 2);
+            }
+
+            _testWorkspace = null;
+            ApplyPanels();
+        }
+        finally
+        {
+            _testWorkspaceRestoring = false;
+        }
     }
 
     private void ShowLiveChart()

@@ -343,6 +343,8 @@
   "ui.saved": "报告已保存：{0}",
   "ui.sensorReads": "传感器读取 {0} 次，失败 {1} 次",
   "ui.settings": "设置",
+  "ui.testWindow": "测试窗口",
+  "ui.resultWindow": "结果窗口",
   "ui.showTrayIcon": "托盘图标",
   "ui.closeToTray": "关闭后后台运行",
   "ui.startWithWindows": "开机自启",

@@ -24,6 +24,8 @@ internal enum MenuCommand
     AlwaysOnTop,
     Floating,
     Crosshair,
+    TestWindow,
+    ResultWindow,
     Guide,
     Updates,
     About,

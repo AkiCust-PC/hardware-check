@@ -343,6 +343,8 @@
   "ui.saved": "Report saved: {0}",
   "ui.sensorReads": "{0} sensor reads, {1} failed",
   "ui.settings": "Settings",
+  "ui.testWindow": "Test window",
+  "ui.resultWindow": "Results window",
   "ui.showTrayIcon": "Tray icon",
   "ui.closeToTray": "Keep running",
   "ui.startWithWindows": "Start with Windows",
