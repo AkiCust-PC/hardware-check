@@ -139,6 +139,7 @@ internal sealed class MainForm : Form
     private AdvancedInfoForm? _advancedForm;
     private LiveChartForm? _chartForm;
     private FloatingPerformanceForm? _floatingForm;
+    private CrosshairOverlayForm? _crosshairForm;
     private ActivitySnapshot? _activitySnapshot;
     private TestRunResult? _lastRun;
     private MemoryTestResult? _memoryResult;
@@ -185,6 +186,7 @@ internal sealed class MainForm : Form
     {
         base.OnShown(e);
         ApplyBodyWidths();
+        UpdateCrosshair();
         if (_startHidden && _settings is { ShowTrayIcon: true, CloseToTray: true })
         {
             HideToTray();
@@ -281,6 +283,8 @@ internal sealed class MainForm : Form
         StopLiveMonitor();
         _floatingForm?.Dispose();
         _floatingForm = null;
+        _crosshairForm?.Dispose();
+        _crosshairForm = null;
         _activityMonitor?.Dispose();
         _sensorSource?.Dispose();
         if (_isDriverOurs)
@@ -366,6 +370,10 @@ internal sealed class MainForm : Form
         var menu = new ContextMenuStrip();
         menu.Items.Add(Item(_t["tray.open"], (_, _) => RestoreFromTray()));
         menu.Items.Add(Item(_t["tray.floating"], (_, _) => ShowFloating()));
+        var crosshair = new ToolStripMenuItem(_t["crosshair.toggle"]) { Checked = _settings.CrosshairEnabled };
+        crosshair.Click += (_, _) => ToggleCrosshair();
+        menu.Items.Add(crosshair);
+        menu.Items.Add(Item(_t["crosshair.settings"], (_, _) => OpenCrosshairSettings()));
         menu.Items.Add(Item(_t["tray.chart"], (_, _) => ShowLiveChart()));
         menu.Items.Add(Item(_t["tray.diagnostic"], (_, _) => ShowMaintenance()));
         menu.Items.Add(new ToolStripSeparator());
@@ -781,6 +789,9 @@ internal sealed class MainForm : Form
         NativeMenu.AddSeparator(tools);
         NativeMenu.AddItem(tools, MenuCommand.AdvancedInfo, _t["ui.advancedInfo"]);
         NativeMenu.AddItem(tools, MenuCommand.Maintenance, _t["ui.maintenance"]);
+        NativeMenu.AddSeparator(tools);
+        NativeMenu.AddItem(tools, MenuCommand.Crosshair, _t["crosshair.toggle"]);
+        NativeMenu.AddItem(tools, MenuCommand.CrosshairSettings, _t["crosshair.settings"]);
 
         var settings = menu.AddSubmenu(_t["ui.menuSettings"]);
         NativeMenu.AddItem(settings, MenuCommand.Settings, _t["ui.settings"]);
@@ -863,6 +874,12 @@ internal sealed class MainForm : Form
                 break;
             case MenuCommand.Floating:
                 ShowFloating();
+                break;
+            case MenuCommand.Crosshair:
+                ToggleCrosshair();
+                break;
+            case MenuCommand.CrosshairSettings:
+                OpenCrosshairSettings();
                 break;
             case MenuCommand.Exit:
                 ExitApplication();
@@ -1536,6 +1553,62 @@ internal sealed class MainForm : Form
         form.Activate();
     }
 
+    private CrosshairSettings CurrentCrosshair() => new(
+        (CrosshairShape)Math.Clamp(_settings.CrosshairShape, 0, 3),
+        Color.FromArgb(_settings.CrosshairColorArgb),
+        _settings.CrosshairLength,
+        _settings.CrosshairThickness,
+        _settings.CrosshairGap,
+        _settings.CrosshairOpacity);
+
+    private void ToggleCrosshair()
+    {
+        SaveSettings(_settings with { CrosshairEnabled = !_settings.CrosshairEnabled });
+        UpdateCrosshair();
+        UpdateCommandStates();
+    }
+
+    private void UpdateCrosshair()
+    {
+        if (!_settings.CrosshairEnabled)
+        {
+            _crosshairForm?.Dispose();
+            _crosshairForm = null;
+            return;
+        }
+
+        if (_crosshairForm is { IsDisposed: false })
+        {
+            _crosshairForm.Apply(CurrentCrosshair());
+            return;
+        }
+
+        _crosshairForm = new CrosshairOverlayForm(CurrentCrosshair());
+        _crosshairForm.FormClosed += (_, _) => _crosshairForm = null;
+        _crosshairForm.Show();
+    }
+
+    private void OpenCrosshairSettings()
+    {
+        using var form = new CrosshairSettingsForm(_t, CurrentCrosshair(), Font);
+        if (form.ShowDialog(this) != DialogResult.OK || form.Result is not { } result)
+        {
+            return;
+        }
+
+        SaveSettings(_settings with
+        {
+            CrosshairShape = (int)result.Shape,
+            CrosshairColorArgb = result.Color.ToArgb(),
+            CrosshairLength = result.Length,
+            CrosshairThickness = result.Thickness,
+            CrosshairGap = result.Gap,
+            CrosshairOpacity = result.Opacity,
+        });
+        UpdateCrosshair();
+        UpdateCommandStates();
+    }
+
     private void ShowLiveChart()
     {
         if (_hardware is null)
@@ -2038,6 +2111,7 @@ internal sealed class MainForm : Form
             menu.SetChecked(MenuCommand.ShowMonitor, !_settings.IsMonitorPanelHidden);
             menu.SetChecked(MenuCommand.ShowTests, !_settings.IsTestPanelHidden);
             menu.SetChecked(MenuCommand.AlwaysOnTop, _settings.IsAlwaysOnTop);
+            menu.SetChecked(MenuCommand.Crosshair, _settings.CrosshairEnabled);
             menu.SetEnabled(MenuCommand.RestartToFirmware, !isRunning);
             for (var index = 0; index < LanguageChoices.Length; index++)
             {

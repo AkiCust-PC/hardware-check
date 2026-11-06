@@ -61,6 +61,13 @@ public sealed record AppSettings(
     bool FloatingSnapped = false,
     int FloatingEdge = 0,
     bool FloatingInfoVisible = true,
+    bool CrosshairEnabled = false,
+    int CrosshairShape = 1,
+    int CrosshairColorArgb = unchecked((int)0xFFFF0000),
+    int CrosshairLength = 16,
+    int CrosshairThickness = 2,
+    int CrosshairGap = 4,
+    int CrosshairOpacity = 100,
     bool IsHardwarePanelHidden = false,
     bool IsMonitorPanelHidden = false,
     bool IsTestPanelHidden = false)

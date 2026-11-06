@@ -23,6 +23,8 @@ internal enum MenuCommand
     ShowTests,
     AlwaysOnTop,
     Floating,
+    Crosshair,
+    CrosshairSettings,
     Guide,
     Updates,
     About,
