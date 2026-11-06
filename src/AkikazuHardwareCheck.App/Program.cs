@@ -12,6 +12,7 @@ internal static class Program
     public const string REMOVE_DRIVER_ARGUMENT = "--remove-driver";
 
     private const string NO_ELEVATE_ARGUMENT = "--no-elevate";
+    private const string INSTANCE_MUTEX_NAME = "Local\\AkikazuHardwareCheck.SingleInstance";
     private const uint SEM_FAILCRITICALERRORS = 0x0001;
     private const uint SEM_NOGPFAULTERRORBOX = 0x0002;
     private const uint SEM_NOOPENFILEERRORBOX = 0x8000;
@@ -44,11 +45,48 @@ internal static class Program
         ApplicationConfiguration.Initialize();
         InstallCrashGuard();
 
+        // Only one main window is allowed. A second launch asks the existing instance to show itself,
+        // then exits without creating another window.
+        using var instance = new Mutex(true, INSTANCE_MUTEX_NAME, out var createdNew);
+        if (!createdNew)
+        {
+            SingleInstanceListener.NotifyExisting();
+            return;
+        }
+
         // Lets standard controls and the title bar follow the Windows light or dark setting.
         Application.SetColorMode(SystemColorMode.System);
         try
         {
-            Application.Run(new MainForm(args.Contains("--tray", StringComparer.OrdinalIgnoreCase)));
+            var main = new MainForm(args.Contains("--tray", StringComparer.OrdinalIgnoreCase));
+            using var restore = SingleInstanceListener.CreateRestoreEvent();
+            var restoreThread = new Thread(() =>
+            {
+                while (!main.IsDisposed)
+                {
+                    if (restore.WaitOne(500))
+                    {
+                        try
+                        {
+                            main.RestoreFromExternalLaunch();
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                            return;
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            return;
+                        }
+                    }
+                }
+            })
+            {
+                IsBackground = true,
+                Name = "Single-instance restore listener",
+            };
+            restoreThread.Start();
+            Application.Run(main);
         }
         catch (Exception exception)
         {

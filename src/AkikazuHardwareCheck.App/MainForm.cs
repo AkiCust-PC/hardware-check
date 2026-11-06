@@ -306,6 +306,35 @@ internal sealed class MainForm : Form
         Hide();
     }
 
+    /// <summary>Called by the hidden single-instance listener when another launch asks for this window.</summary>
+    internal void RestoreFromExternalLaunch()
+    {
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        if (InvokeRequired)
+        {
+            BeginInvoke(new Action(RestoreFromExternalLaunch));
+            return;
+        }
+
+        ShowInTaskbar = true;
+        if (!Visible)
+        {
+            Show();
+        }
+
+        if (WindowState == FormWindowState.Minimized)
+        {
+            WindowState = FormWindowState.Normal;
+        }
+
+        Activate();
+        BringToFront();
+    }
+
     private void RestoreFromTray()
     {
         ShowInTaskbar = true;
