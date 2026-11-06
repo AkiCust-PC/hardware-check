@@ -172,7 +172,33 @@ internal sealed class FloatingPerformanceForm : Form
             ? new Size(DpiScale(STRIP_WIDTH), DpiScale(STRIP_HEIGHT))
             : new Size(DpiScale(BALL_SIZE), DpiScale(BALL_SIZE));
         ClientSize = size;
+        if (_snapped)
+        {
+            SetRoundedRegion(size, DpiScale(8));
+        }
+        else
+        {
+            SetEllipseRegion(size);
+        }
+
         Render();
+    }
+
+    private void SetEllipseRegion(Size size)
+    {
+        using var path = new GraphicsPath();
+        path.AddEllipse(0, 0, Math.Max(1, size.Width - 1), Math.Max(1, size.Height - 1));
+        var previous = Region;
+        Region = new Region(path);
+        previous?.Dispose();
+    }
+
+    private void SetRoundedRegion(Size size, int radius)
+    {
+        using var path = RoundedRect(new Rectangle(0, 0, Math.Max(1, size.Width - 1), Math.Max(1, size.Height - 1)), radius);
+        var previous = Region;
+        Region = new Region(path);
+        previous?.Dispose();
     }
 
     private void Render()
@@ -325,7 +351,8 @@ internal sealed class FloatingPerformanceForm : Form
 
     private void DrawGlass(Graphics graphics, GraphicsPath path, Rectangle bounds)
     {
-        var tint = Application.IsDarkModeEnabled ? Color.FromArgb(188, 26, 32, 42) : Color.FromArgb(204, 243, 247, 252);
+        // Opaque glass: a translucent ball lets the changing hardware list behind it show through and flicker.
+        var tint = Application.IsDarkModeEnabled ? Color.FromArgb(255, 26, 32, 42) : Color.FromArgb(255, 243, 247, 252);
         using var fill = new SolidBrush(tint);
         graphics.FillPath(fill, path);
         var pulse = (float)((Math.Sin(_animationPhase) + 1) / 2);
