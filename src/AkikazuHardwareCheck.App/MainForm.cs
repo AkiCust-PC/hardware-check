@@ -216,9 +216,8 @@ internal sealed class MainForm : Form
         // Paint the shell and the "reading" placeholders before WMI work starts, so the window never appears as a
         // blank white surface on a slow first run.
         Refresh();
-        // The live monitor does not need the hardware inventory. Start it first so CPU/GPU/memory values appear while
-        // the slower WMI/disk enumeration is still running.
-        StartLiveMonitor();
+        // Memory, disk and network do not need the sensor driver. Start them now; the CPU/GPU sensor starts as soon
+        // as the driver check in LoadHardwareAsync is done, before the slower WMI/disk enumeration.
         StartActivityMonitor();
         Refresh();
         _ = LoadHardwareAsync();
@@ -1576,6 +1575,8 @@ internal sealed class MainForm : Form
             return;
         }
 
+        StartLiveMonitor();
+        StartActivityMonitor();
         _phaseLabel.Text = _t["ui.loading"];
         IProgress<HardwareInventory> progress = new Progress<HardwareInventory>(ShowPartialHardware);
         _hardware = await Task.Run(() => HardwareInfoService.Read(progress.Report));
