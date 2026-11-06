@@ -36,6 +36,7 @@
 - **文案**：用户可见文本都在 `Core/Localization/*.json`，四种语言同步。使用短词短句。
 - **隐私**：不读取 Windows 产品密钥、磁盘文件内容、Wi-Fi 名称、主机名、用户名，也不读取主板、内存、硬盘、显示器的序列号。数据只保存在本地，不上传。
 - **安全**：不做破坏性磁盘测试，不写自己的内核驱动，不改变温度保护的默认值而不说明理由。
+- **异常处理**：未处理异常不得弹出 WinForms/Windows 错误对话框。UI 线程、后台线程和未观察 Task 的异常写入 `%LOCALAPPDATA%\AkikazuHardwareCheck\error.log` 后以退出码 1 直接退出，并抑制 Windows Error Reporting 弹窗。
 
 ## Current UI and interaction decisions
 

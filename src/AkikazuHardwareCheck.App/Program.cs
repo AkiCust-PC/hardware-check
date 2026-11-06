@@ -12,6 +12,9 @@ internal static class Program
     public const string REMOVE_DRIVER_ARGUMENT = "--remove-driver";
 
     private const string NO_ELEVATE_ARGUMENT = "--no-elevate";
+    private const uint SEM_FAILCRITICALERRORS = 0x0001;
+    private const uint SEM_NOGPFAULTERRORBOX = 0x0002;
+    private const uint SEM_NOOPENFILEERRORBOX = 0x8000;
     private static readonly TimeSpan ParentExitTimeout = TimeSpan.FromSeconds(30);
 
     [STAThread]
@@ -39,11 +42,60 @@ internal static class Program
         }
 
         ApplicationConfiguration.Initialize();
+        InstallCrashGuard();
 
         // Lets standard controls and the title bar follow the Windows light or dark setting.
         Application.SetColorMode(SystemColorMode.System);
-        Application.Run(new MainForm(args.Contains("--tray", StringComparer.OrdinalIgnoreCase)));
+        try
+        {
+            Application.Run(new MainForm(args.Contains("--tray", StringComparer.OrdinalIgnoreCase)));
+        }
+        catch (Exception exception)
+        {
+            ExitSilently(exception);
+        }
     }
+
+    /// <summary>
+    /// A hardware diagnostic tool must not put an exception dialog in front of the operator. UI, worker-thread and
+    /// unobserved-task failures are written locally and terminate the process without a dialog.
+    /// </summary>
+    private static void InstallCrashGuard()
+    {
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+        Application.ThreadException += (_, e) => ExitSilently(e.Exception);
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => ExitSilently(e.ExceptionObject as Exception);
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            e.SetObserved();
+            ExitSilently(e.Exception);
+        };
+    }
+
+    private static void ExitSilently(Exception? exception)
+    {
+        try
+        {
+            var folder = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "AkikazuHardwareCheck");
+            Directory.CreateDirectory(folder);
+            File.AppendAllText(
+                Path.Combine(folder, "error.log"),
+                $"{DateTimeOffset.Now:O}{Environment.NewLine}{exception}{Environment.NewLine}{Environment.NewLine}",
+                new System.Text.UTF8Encoding(false));
+        }
+        catch
+        {
+            // Logging must never turn a silent exit into another dialog.
+        }
+
+        Environment.Exit(1);
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern uint SetErrorMode(uint mode);
 
     /// <summary>The driver can only stop once the main program has closed it, which is when that process ends.</summary>
     private static void RemoveDriverAfterExit(string parentId, string removesPackage, string language)
