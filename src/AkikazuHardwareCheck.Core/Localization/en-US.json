@@ -568,6 +568,7 @@
   "peripheralTest.keyboard": "Keyboard",
   "peripheralTest.mouse": "Mouse / pointer",
   "peripheralTest.gamepad": "Gamepad",
+  "peripheralTest.vibrate": "Vibration test",
   "peripheralTest.notDetected": "Not detected",
   "peripheralTest.screen": "Screen",
   "peripheralTest.startDisplay": "Start full-screen test",

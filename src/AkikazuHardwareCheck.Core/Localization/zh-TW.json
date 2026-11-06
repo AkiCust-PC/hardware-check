@@ -568,6 +568,7 @@
   "peripheralTest.keyboard": "鍵盤",
   "peripheralTest.mouse": "滑鼠 / 指標",
   "peripheralTest.gamepad": "遊戲手把",
+  "peripheralTest.vibrate": "震動測試",
   "peripheralTest.notDetected": "未偵測到",
   "peripheralTest.screen": "螢幕",
   "peripheralTest.startDisplay": "開始全螢幕測試",

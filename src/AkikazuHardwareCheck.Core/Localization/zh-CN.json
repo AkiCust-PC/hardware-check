@@ -568,6 +568,7 @@
   "peripheralTest.keyboard": "键盘",
   "peripheralTest.mouse": "鼠标 / 指针",
   "peripheralTest.gamepad": "手柄",
+  "peripheralTest.vibrate": "震动测试",
   "peripheralTest.notDetected": "未检测到",
   "peripheralTest.screen": "屏幕",
   "peripheralTest.startDisplay": "开始全屏测试",

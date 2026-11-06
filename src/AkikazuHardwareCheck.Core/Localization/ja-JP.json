@@ -568,6 +568,7 @@
   "peripheralTest.keyboard": "キーボード",
   "peripheralTest.mouse": "マウス / ポインター",
   "peripheralTest.gamepad": "ゲームパッド",
+  "peripheralTest.vibrate": "振動テスト",
   "peripheralTest.notDetected": "未検出",
   "peripheralTest.screen": "画面",
   "peripheralTest.startDisplay": "全画面テストを開始",

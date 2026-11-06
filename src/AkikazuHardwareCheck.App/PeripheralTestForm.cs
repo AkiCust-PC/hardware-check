@@ -257,7 +257,7 @@ internal sealed class PeripheralTestForm : Form
     private TabPage BuildGamepadPage()
     {
         var page = new TabPage(_t["peripheralTest.gamepad"]) { Padding = new Padding(Ui.SPACING), UseVisualStyleBackColor = true };
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 7, Margin = new Padding(0) };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 8, Margin = new Padding(0) };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         for (var row = 0; row < layout.RowCount; row++)
         {
@@ -271,6 +271,10 @@ internal sealed class PeripheralTestForm : Form
         AddRow(layout, 4, _t["peripheralTest.triggers"], "");
         layout.Controls.Add(_gamepadTriggers, 0, 5);
         layout.Controls.Add(_gamepadSticks, 0, 6);
+        var vibrate = Ui.Button();
+        vibrate.Text = _t["peripheralTest.vibrate"];
+        vibrate.Click += async (_, _) => await TestVibrationAsync(vibrate);
+        layout.Controls.Add(vibrate, 0, 7);
         page.Controls.Add(layout);
         return page;
     }
@@ -431,6 +435,31 @@ internal sealed class PeripheralTestForm : Form
         }
     }
 
+    private async Task TestVibrationAsync(Button button)
+    {
+        button.Enabled = false;
+        try
+        {
+            var vibration = new XInputVibration { LeftMotorSpeed = ushort.MaxValue, RightMotorSpeed = ushort.MaxValue };
+            if (XInputSetState(0, ref vibration) != 0)
+            {
+                return;
+            }
+
+            await Task.Delay(800);
+            vibration = default;
+            _ = XInputSetState(0, ref vibration);
+        }
+        catch (Exception exception) when (exception is DllNotFoundException or EntryPointNotFoundException)
+        {
+            _gamepadStatus.Text = _t["peripheralTest.gamepadUnavailable"];
+        }
+        finally
+        {
+            button.Enabled = true;
+        }
+    }
+
     private static string DescribeButtons(ushort buttons)
     {
         if (buttons == 0)
@@ -483,6 +512,16 @@ internal sealed class PeripheralTestForm : Form
         public XInputGamepad Gamepad;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct XInputVibration
+    {
+        public ushort LeftMotorSpeed;
+        public ushort RightMotorSpeed;
+    }
+
     [DllImport("xinput1_4.dll")]
     private static extern uint XInputGetState(uint index, out XInputState state);
+
+    [DllImport("xinput1_4.dll")]
+    private static extern uint XInputSetState(uint index, ref XInputVibration vibration);
 }
