@@ -578,7 +578,7 @@
   "peripheralTest.clear": "清除",
   "peripheralTest.pointer": "指標",
   "peripheralTest.mouseHelp": "請點擊各按鍵、滾動滾輪並在框內移動。觸控板與觸控螢幕會顯示為指標裝置，這裡無法確認裝置類型。",
-  "peripheralTest.mouseCounts": "左鍵 {0} / 右鍵 {1} / 中鍵 {2} / 滾輪 {3}",
+  "peripheralTest.mouseCounts": "左鍵 {0} / 右鍵 {1} / 中鍵 {2} / 側鍵 1 {3} / 側鍵 2 {4} / 滾輪 {5}",
   "peripheralTest.gamepadHelp": "僅支援 XInput 相容手把。開啟視窗前請先連接手把。",
   "peripheralTest.gamepadMissing": "未偵測到 XInput 手把。",
   "peripheralTest.gamepadConnected": "手把已連接",

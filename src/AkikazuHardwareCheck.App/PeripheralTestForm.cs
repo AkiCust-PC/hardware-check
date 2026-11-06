@@ -28,6 +28,8 @@ internal sealed class PeripheralTestForm : Form
     private int _leftClicks;
     private int _rightClicks;
     private int _middleClicks;
+    private int _x1Clicks;
+    private int _x2Clicks;
     private int _wheelDelta;
 
     public PeripheralTestForm(Translator t, HardwareInventory hardware, AudioCheckResult audio, Font font)
@@ -206,6 +208,14 @@ internal sealed class PeripheralTestForm : Form
             {
                 _middleClicks++;
             }
+            else if (e.Button == MouseButtons.XButton1)
+            {
+                _x1Clicks++;
+            }
+            else if (e.Button == MouseButtons.XButton2)
+            {
+                _x2Clicks++;
+            }
 
             UpdateMouseStatus();
         };
@@ -302,7 +312,7 @@ internal sealed class PeripheralTestForm : Form
 
     private void UpdateMouseStatus()
     {
-        _mouseStatus.Text = _t["peripheralTest.mouseCounts", _leftClicks, _rightClicks, _middleClicks, _wheelDelta];
+        _mouseStatus.Text = _t["peripheralTest.mouseCounts", _leftClicks, _rightClicks, _middleClicks, _x1Clicks, _x2Clicks, _wheelDelta];
     }
 
     private async Task RunSpeakerTestAsync(Button button)

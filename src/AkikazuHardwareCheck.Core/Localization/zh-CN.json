@@ -578,7 +578,7 @@
   "peripheralTest.clear": "清除",
   "peripheralTest.pointer": "指针",
   "peripheralTest.mouseHelp": "请点击各按键、滚动滚轮并在框内移动。触控板和触摸屏会显示为指针设备，这里无法确认设备类型。",
-  "peripheralTest.mouseCounts": "左键 {0} / 右键 {1} / 中键 {2} / 滚轮 {3}",
+  "peripheralTest.mouseCounts": "左键 {0} / 右键 {1} / 中键 {2} / 侧键 1 {3} / 侧键 2 {4} / 滚轮 {5}",
   "peripheralTest.gamepadHelp": "仅支持 XInput 兼容手柄。打开窗口前请先连接手柄。",
   "peripheralTest.gamepadMissing": "未检测到 XInput 手柄。",
   "peripheralTest.gamepadConnected": "手柄已连接",
