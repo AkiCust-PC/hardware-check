@@ -146,7 +146,6 @@ internal sealed class MainForm : Form
     private bool _closeAfterTest;
     private NotifyIcon? _trayIcon;
     private bool _isExiting;
-    private bool _trayHintShown;
     private readonly bool _startHidden;
 
     public MainForm(bool startHidden = false)
@@ -186,7 +185,7 @@ internal sealed class MainForm : Form
         ApplyBodyWidths();
         if (_startHidden && _settings is { ShowTrayIcon: true, CloseToTray: true })
         {
-            HideToTray(showHint: false);
+            HideToTray();
         }
 
         _ = LoadHardwareAsync();
@@ -247,10 +246,11 @@ internal sealed class MainForm : Form
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
-        if (!_isExiting && !_closeAfterTest && e.CloseReason == CloseReason.UserClosing && _settings is { CloseToTray: true, ShowTrayIcon: true } && !IsTestRunning)
+        if (!_isExiting && !_closeAfterTest && e.CloseReason == CloseReason.UserClosing && _settings is { CloseToTray: true, ShowTrayIcon: true })
         {
+            // Closing is silent: hide to the tray without a balloon or confirmation. A running test keeps running.
             e.Cancel = true;
-            HideToTray(showHint: true);
+            HideToTray();
             return;
         }
 
@@ -297,15 +297,10 @@ internal sealed class MainForm : Form
         base.OnFormClosed(e);
     }
 
-    private void HideToTray(bool showHint)
+    private void HideToTray()
     {
         ShowInTaskbar = false;
         Hide();
-        if (showHint && !_trayHintShown)
-        {
-            _trayHintShown = true;
-            _trayIcon?.ShowBalloonTip(3000, _t["ui.appName"], _t["tray.hint"], ToolTipIcon.Info);
-        }
     }
 
     private void RestoreFromTray()

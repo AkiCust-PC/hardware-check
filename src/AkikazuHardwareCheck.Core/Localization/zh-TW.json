@@ -352,7 +352,6 @@
   "tray.diagnostic": "診斷工具",
   "tray.settings": "設定",
   "tray.exit": "結束",
-  "tray.hint": "程式仍在背景執行，按兩下圖示可恢復視窗。",
   "floating.title": "效能",
   "floating.ballLabel": "CPU / GPU",
   "floating.memoryShort": "記憶體",

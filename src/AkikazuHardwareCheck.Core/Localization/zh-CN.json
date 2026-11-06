@@ -352,7 +352,6 @@
   "tray.diagnostic": "诊断工具",
   "tray.settings": "设置",
   "tray.exit": "退出",
-  "tray.hint": "程序仍在后台运行，双击图标可以恢复窗口。",
   "floating.title": "性能",
   "floating.ballLabel": "CPU / GPU",
   "floating.memoryShort": "内存",

@@ -352,7 +352,6 @@
   "tray.diagnostic": "診断ツール",
   "tray.settings": "設定",
   "tray.exit": "終了",
-  "tray.hint": "プログラムはバックグラウンドで実行中です。アイコンをダブルクリックすると復元します。",
   "floating.title": "パフォーマンス",
   "floating.ballLabel": "CPU / GPU",
   "floating.memoryShort": "メモリ",

@@ -352,7 +352,6 @@
   "tray.diagnostic": "Diagnostic tools",
   "tray.settings": "Settings",
   "tray.exit": "Exit",
-  "tray.hint": "The program is still running in the background. Double-click the icon to restore it.",
   "floating.title": "Performance",
   "floating.ballLabel": "CPU / GPU",
   "floating.memoryShort": "Mem",
