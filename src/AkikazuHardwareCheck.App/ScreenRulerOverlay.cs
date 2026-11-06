@@ -6,9 +6,9 @@ namespace AkikazuHardwareCheck.App;
 /// <summary>A click-through border ruler. Ticks are based on the physical primary screen pixels.</summary>
 internal sealed class ScreenRulerOverlay : Form
 {
-    private const int TICK_SPACING = 50;
-    private const int MAJOR_TICK = 100;
-    private static readonly Color RulerColor = Color.FromArgb(220, 255, 80, 80);
+    private Color _color = Color.FromArgb(220, 255, 80, 80);
+    private int _spacing = 50;
+    private int _opacity = 85;
 
     public ScreenRulerOverlay()
     {
@@ -19,6 +19,14 @@ internal sealed class ScreenRulerOverlay : Form
         AutoScaleMode = AutoScaleMode.None;
         BackColor = Color.Black;
         Bounds = new Rectangle(0, 0, GetSystemMetrics(0), GetSystemMetrics(1));
+    }
+
+    public void Apply(Color color, int opacity, int spacing)
+    {
+        _color = color;
+        _opacity = Math.Clamp(opacity, 10, 100);
+        _spacing = Math.Clamp(spacing, 20, 200);
+        Render();
     }
 
     protected override bool ShowWithoutActivation => true;
@@ -59,17 +67,18 @@ internal sealed class ScreenRulerOverlay : Form
 
         var width = ClientSize.Width;
         var height = ClientSize.Height;
+        var color = Color.FromArgb(_opacity * 255 / 100, _color);
         using var bitmap = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
         using (var graphics = Graphics.FromImage(bitmap))
-        using (var pen = new Pen(RulerColor, 1))
-        using (var brush = new SolidBrush(RulerColor))
+        using (var pen = new Pen(color, 1))
+        using (var brush = new SolidBrush(color))
         using (var font = new Font("Segoe UI", 8f, FontStyle.Regular, GraphicsUnit.Point))
         {
             graphics.SmoothingMode = SmoothingMode.AntiAlias;
             graphics.Clear(Color.Transparent);
-            for (var x = 0; x < width; x += TICK_SPACING)
+            for (var x = 0; x < width; x += _spacing)
             {
-                var major = x % MAJOR_TICK == 0;
+                var major = x % (_spacing * 2) == 0;
                 var length = major ? 18 : 10;
                 graphics.DrawLine(pen, x, 0, x, length);
                 graphics.DrawLine(pen, x, height - length, x, height);
@@ -79,9 +88,9 @@ internal sealed class ScreenRulerOverlay : Form
                 }
             }
 
-            for (var y = 0; y < height; y += TICK_SPACING)
+            for (var y = 0; y < height; y += _spacing)
             {
-                var major = y % MAJOR_TICK == 0;
+                var major = y % (_spacing * 2) == 0;
                 var length = major ? 18 : 10;
                 graphics.DrawLine(pen, 0, y, length, y);
                 graphics.DrawLine(pen, width - length, y, width, y);

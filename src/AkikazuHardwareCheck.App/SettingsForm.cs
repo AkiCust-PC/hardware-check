@@ -30,7 +30,10 @@ internal sealed class SettingsForm : Form
     private readonly CheckBox _crosshairEnabled = Option();
     private readonly NumericUpDown _hudFont = new() { Minimum = 8, Maximum = 32, Margin = new Padding(0, 0, 0, Ui.SPACING) };
     private readonly CheckedListBox _hudItems = new() { CheckOnClick = true, IntegralHeight = false, Height = 100, Margin = new Padding(0) };
+    private readonly NumericUpDown _rulerOpacity = new() { Minimum = 10, Maximum = 100, Margin = new Padding(0, 0, 0, Ui.SPACING) };
+    private readonly NumericUpDown _rulerSpacing = new() { Minimum = 20, Maximum = 200, Increment = 10, Margin = new Padding(0, 0, 0, Ui.SPACING) };
     private Color _hudColor;
+    private Color _rulerColor;
     private readonly Translator _t;
     private CrosshairSettings _crosshair;
 
@@ -63,6 +66,9 @@ internal sealed class SettingsForm : Form
         _crosshairEnabled.Checked = settings.CrosshairEnabled;
         _hudFont.Value = Math.Clamp(settings.HudFontSize, 8, 32);
         _hudColor = Color.FromArgb(settings.HudColorArgb);
+        _rulerColor = Color.FromArgb(settings.RulerColorArgb);
+        _rulerOpacity.Value = Math.Clamp(settings.RulerOpacity, 10, 100);
+        _rulerSpacing.Value = Math.Clamp(settings.RulerSpacing, 20, 200);
         _hudItems.Height = LogicalToDeviceUnits(100);
         var hudLabels = new[] { t["hud.cpuLoad"], t["hud.cpuTemp"], t["hud.gpuLoad"], t["hud.gpuTemp"], t["hud.memory"] };
         for (var index = 0; index < hudLabels.Length; index++)
@@ -124,6 +130,9 @@ internal sealed class SettingsForm : Form
         HudFontSize = (int)_hudFont.Value,
         HudColorArgb = _hudColor.ToArgb(),
         HudItems = Enumerable.Range(0, _hudItems.Items.Count).Aggregate(0, (value, index) => _hudItems.GetItemChecked(index) ? value | (1 << index) : value),
+        RulerColorArgb = _rulerColor.ToArgb(),
+        RulerOpacity = (int)_rulerOpacity.Value,
+        RulerSpacing = (int)_rulerSpacing.Value,
     };
 
     private TabPage BuildGeneralPage(Translator t)
@@ -202,6 +211,19 @@ internal sealed class SettingsForm : Form
         AddField(fields, t["hud.fontSize"], _hudFont);
         AddField(fields, t["hud.color"], colorButton);
         AddField(fields, t["hud.items"], _hudItems);
+        var rulerColor = Ui.Button();
+        rulerColor.Text = t["ruler.color"];
+        rulerColor.Click += (_, _) =>
+        {
+            using var dialog = new ColorDialog { Color = _rulerColor, FullOpen = true };
+            if (dialog.ShowDialog(this) == DialogResult.OK)
+            {
+                _rulerColor = dialog.Color;
+            }
+        };
+        AddField(fields, t["ruler.color"], rulerColor);
+        AddField(fields, t["ruler.opacity"], _rulerOpacity);
+        AddField(fields, t["ruler.spacing"], _rulerSpacing);
         page.Controls.Add(fields);
         return page;
     }

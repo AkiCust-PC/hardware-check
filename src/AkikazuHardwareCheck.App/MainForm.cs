@@ -1659,10 +1659,12 @@ internal sealed class MainForm : Form
 
         if (_rulerOverlay is { IsDisposed: false })
         {
+            _rulerOverlay.Apply(Color.FromArgb(_settings.RulerColorArgb), _settings.RulerOpacity, _settings.RulerSpacing);
             return;
         }
 
         _rulerOverlay = new ScreenRulerOverlay();
+        _rulerOverlay.Apply(Color.FromArgb(_settings.RulerColorArgb), _settings.RulerOpacity, _settings.RulerSpacing);
         _rulerOverlay.FormClosed += (_, _) => _rulerOverlay = null;
         _rulerOverlay.Show();
     }
@@ -2544,6 +2546,7 @@ internal sealed class MainForm : Form
             SaveSettings(settings);
             UpdateCrosshair();
             UpdateHud();
+            UpdateRuler();
             UpdateCommandStates();
         }
     }
