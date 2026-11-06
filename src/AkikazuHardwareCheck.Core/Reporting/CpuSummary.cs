@@ -27,7 +27,7 @@ public static class CpuSummary
             Add("cpu.manufacturer", cpu.Manufacturer);
             Add("cpu.socket", cpu.Socket);
             Add("cpu.coresThreads", cpu is { PhysicalCores: { } cores, LogicalThreads: { } threads } ? t["cpu.coresThreadsValue", cores, threads] : null);
-            Add("cpu.baseClock", cpu.MaxClockMhz is { } clock and > 0 ? $"{clock.ToString(CultureInfo.InvariantCulture)} MHz" : null);
+            Add("advanced.maxClock", cpu.MaxClockMhz is { } clock and > 0 ? $"{clock.ToString(CultureInfo.InvariantCulture)} MHz" : null);
             Add("cpu.cacheL2", CacheText(cpu.L2CacheKilobytes));
             Add("cpu.cacheL3", CacheText(cpu.L3CacheKilobytes));
             Add("cpu.identifier", cpu.Identifier);

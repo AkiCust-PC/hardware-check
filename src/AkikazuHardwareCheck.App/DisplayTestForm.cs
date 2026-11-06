@@ -1,5 +1,6 @@
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
+using System.Globalization;
 using AkikazuHardwareCheck.Core.Localization;
 
 namespace AkikazuHardwareCheck.App;
@@ -137,11 +138,11 @@ internal sealed class DisplayTestForm : Form
     {
         var detail = _index switch
         {
-            6 => $"  {_uniformityLevel}%",
-            7 => $"  Δ{_colorDistance}",
-            9 => $"  {_sharpness:0}pt",
-            11 => $"  γ{_gamma:0.00}",
-            12 => $"  {_responseSpeed}px/s",
+            6 => $"  {_uniformityLevel.ToString(CultureInfo.InvariantCulture)}%",
+            7 => $"  Δ{_colorDistance.ToString(CultureInfo.InvariantCulture)}",
+            9 => $"  {_sharpness.ToString("0", CultureInfo.InvariantCulture)}pt",
+            11 => $"  γ{_gamma.ToString("0.00", CultureInfo.InvariantCulture)}",
+            12 => $"  {_responseSpeed.ToString(CultureInfo.InvariantCulture)}px/s",
             _ => string.Empty,
         };
         _hint.Text = $"{_t["peripheralTest.displayHint"]}  {_index + 1}/13{detail}";

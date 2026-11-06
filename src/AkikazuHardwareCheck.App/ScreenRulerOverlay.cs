@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using System.Globalization;
 using System.Runtime.InteropServices;
 
 namespace AkikazuHardwareCheck.App;
@@ -84,7 +85,7 @@ internal sealed class ScreenRulerOverlay : Form
                 graphics.DrawLine(pen, x, height - length, x, height);
                 if (major)
                 {
-                    graphics.DrawString(x.ToString(), font, brush, x + 3, 2);
+                    graphics.DrawString(x.ToString(CultureInfo.InvariantCulture), font, brush, x + 3, 2);
                 }
             }
 
@@ -96,7 +97,7 @@ internal sealed class ScreenRulerOverlay : Form
                 graphics.DrawLine(pen, width - length, y, width, y);
                 if (major)
                 {
-                    graphics.DrawString(y.ToString(), font, brush, 2, y + 2);
+                    graphics.DrawString(y.ToString(CultureInfo.InvariantCulture), font, brush, 2, y + 2);
                 }
             }
         }

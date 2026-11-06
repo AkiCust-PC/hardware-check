@@ -77,8 +77,7 @@ public sealed record AppSettings(
     int CrosshairGap = 4,
     int CrosshairOpacity = 100,
     bool IsHardwarePanelHidden = false,
-    bool IsMonitorPanelHidden = false,
-    bool IsTestPanelHidden = false)
+    bool IsMonitorPanelHidden = false)
 {
     private const string FOLDER_NAME = "AkikazuHardwareCheck";
 

@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using System.Globalization;
 using AkikazuHardwareCheck.Core.Localization;
 using AkikazuHardwareCheck.Core.Monitoring;
 
@@ -128,7 +129,7 @@ internal sealed class LiveChartForm : Form
         graphics.SmoothingMode = SmoothingMode.AntiAlias;
         graphics.Clear(SystemColors.Window);
         var plot = new Rectangle(CHART_PADDING, LABEL_HEIGHT, Math.Max(1, width - CHART_PADDING - 8), Math.Max(1, height - LABEL_HEIGHT - 12));
-        DrawGrid(graphics, plot, 100, value => $"{value:0}%");
+        DrawGrid(graphics, plot, 100, value => $"{value.ToString("0", CultureInfo.InvariantCulture)}%");
         DrawSeries(graphics, plot, 100, CpuColor, sample => sample.CpuLoad);
         DrawSeries(graphics, plot, 100, GpuColor, sample => sample.GpuLoad);
         DrawSeries(graphics, plot, 100, MemoryColor, sample => sample.MemoryLoad);
