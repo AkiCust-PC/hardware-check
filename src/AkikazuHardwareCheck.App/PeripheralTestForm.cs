@@ -317,18 +317,101 @@ internal sealed class PeripheralTestForm : Form
             return;
         }
 
+        MarkKey(e.KeyCode);
+    }
+
+    private void MarkKey(Keys key)
+    {
         for (var index = 0; index < _keys.Items.Count; index++)
         {
-            if (_keys.Items[index] is Keys key && key == e.KeyCode)
+            if (_keys.Items[index] is Keys candidate && candidate == key)
             {
                 _keys.SetItemChecked(index, true);
                 break;
             }
         }
 
-        var checkedCount = _keys.CheckedItems.Count;
-        _keyCount.Text = _t["peripheralTest.keysTested", checkedCount];
+        _keyCount.Text = _t["peripheralTest.keysTested", _keys.CheckedItems.Count];
     }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        var keyboard = new RawInputDevice
+        {
+            UsagePage = 1,
+            Usage = 6,
+            Flags = 0x00000100,
+            Target = Handle,
+        };
+        _ = RegisterRawInputDevices([keyboard], 1, Marshal.SizeOf<RawInputDevice>());
+    }
+
+    protected override void WndProc(ref Message message)
+    {
+        if (message.Msg == 0x00FF && message.LParam != IntPtr.Zero)
+        {
+            var size = 0;
+            _ = GetRawInputData(message.LParam, 0x10000003, IntPtr.Zero, ref size, Marshal.SizeOf<RawInputHeader>());
+            if (size > 0)
+            {
+                var buffer = Marshal.AllocHGlobal(size);
+                try
+                {
+                    if (GetRawInputData(message.LParam, 0x10000003, buffer, ref size, Marshal.SizeOf<RawInputHeader>()) == size &&
+                        Marshal.ReadInt32(buffer) == 1)
+                    {
+                        var keyboard = Marshal.PtrToStructure<RawKeyboard>(buffer + Marshal.SizeOf<RawInputHeader>());
+                        if (keyboard.Message is 0x0100 or 0x0104 && keyboard.VirtualKey is > 0 and < 0x100)
+                        {
+                            MarkKey((Keys)keyboard.VirtualKey);
+                        }
+                    }
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(buffer);
+                }
+            }
+        }
+
+        base.WndProc(ref message);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RawInputDevice
+    {
+        public ushort UsagePage;
+        public ushort Usage;
+        public uint Flags;
+        public IntPtr Target;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RawInputHeader
+    {
+        public int Type;
+        public int Size;
+        public IntPtr Device;
+        public IntPtr WParam;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RawKeyboard
+    {
+        public ushort MakeCode;
+        public ushort Flags;
+        public ushort Reserved;
+        public ushort VirtualKey;
+        public uint Message;
+        public uint ExtraInformation;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool RegisterRawInputDevices(RawInputDevice[] devices, uint count, int size);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int GetRawInputData(IntPtr rawInput, uint command, IntPtr data, ref int size, int headerSize);
 
     private void UpdateMouseStatus()
     {
