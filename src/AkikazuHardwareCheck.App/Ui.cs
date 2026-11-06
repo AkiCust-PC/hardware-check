@@ -87,6 +87,16 @@ internal static class Ui
     }
 
     /// <summary>Windows' own MDL2 icon font; no icon package or image assets are needed.</summary>
+    /// <summary>Shared native progress-bar setup for every metric tile.</summary>
+    public static ProgressBar MetricBar() => new()
+    {
+        Maximum = PERCENT_MAX,
+        Dock = DockStyle.Top,
+        Margin = new Padding(0),
+        Visible = true,
+        Value = 0,
+    };
+
     public static Label IconLabel(string glyph, float size = 12f)
     {
         var label = new Label

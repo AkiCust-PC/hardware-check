@@ -130,7 +130,7 @@ internal sealed class MetricTile : TableLayoutPanel
 
     private readonly Label _caption = new() { AutoSize = true, Margin = new Padding(0) };
     private readonly Label _value = new() { AutoSize = true, Text = "—", Margin = new Padding(0, 0, 0, 2) };
-    private readonly ProgressBar _bar = new() { Maximum = Ui.PERCENT_MAX, Dock = DockStyle.Top, Margin = new Padding(0), Visible = false };
+    private readonly ProgressBar _bar = Ui.MetricBar();
 
     public MetricTile()
     {
@@ -138,6 +138,7 @@ internal sealed class MetricTile : TableLayoutPanel
         RowCount = 3;
         Dock = DockStyle.Fill;
         Margin = new Padding(0, 0, Ui.SPACING, 0);
+        MinimumSize = new Size(0, LogicalToDeviceUnits(56));
         ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         RowStyles.Add(new RowStyle(SizeType.AutoSize));
         RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -166,14 +167,11 @@ internal sealed class MetricTile : TableLayoutPanel
             MetricLevel.Warning => Ui.WarningColor,
             _ => SystemColors.ControlText,
         };
-        _bar.Visible = fraction is not null;
-        if (fraction is not { } amount)
-        {
-            return;
-        }
-
+        // Keep the track visible for unavailable values; a missing reading must not create an empty gap.
+        _bar.Visible = true;
+        var amount = fraction ?? 0;
         _bar.Value = (int)(Math.Clamp(amount, 0, 1) * Ui.PERCENT_MAX);
-        SendMessageW(_bar.Handle, PBM_SETSTATE, level switch
+        SendMessageW(_bar.Handle, PBM_SETSTATE, fraction is null ? PBST_NORMAL : level switch
         {
             MetricLevel.Alert => PBST_ERROR,
             MetricLevel.Warning => PBST_PAUSED,

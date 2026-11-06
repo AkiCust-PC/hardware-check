@@ -105,6 +105,8 @@ internal sealed class MainForm : Form
     private TableLayoutPanel? _bodyPanel;
     private TableLayoutPanel? _monitorPanel;
     private Control? _chartRow;
+    private bool _onlyMonitor;
+    private bool _monitorOneColumn;
     private Control? _cpuCard;
     private Control? _gpuCard;
     private Control? _systemCard;
@@ -425,6 +427,8 @@ internal sealed class MainForm : Form
         _chartButton.Margin = new Padding(0);
         _chartButton.Click += (_, _) => ShowLiveChart();
         _monitorGroup = Ui.Section(null, BuildMonitorPanel());
+        // The monitor section must fill its row; AutoSize lets the cards collapse and clip their bars.
+        _monitorGroup.AutoSize = false;
         _controlGroup = Ui.Section(null, BuildControlPanel());
         _detailsButton.Margin = new Padding(0, 0, 0, Ui.SPACING / 2);
         _resultGroup = Ui.Section(null, BuildResultPanel());
@@ -446,7 +450,11 @@ internal sealed class MainForm : Form
         // Monitoring is the primary column; hardware configuration is secondary.
         body.Controls.Add(_rightPanel, 0, 0);
         body.Controls.Add(_hardwareGroup, 1, 0);
-        body.Resize += (_, _) => ApplyBodyWidths();
+        body.Resize += (_, _) =>
+        {
+            ApplyBodyWidths();
+            UpdateMonitorLayout();
+        };
         _bodyPanel = body;
         return body;
     }
@@ -510,6 +518,7 @@ internal sealed class MainForm : Form
         panel.Controls.Add(chartRow, 0, 2);
         panel.SetColumnSpan(chartRow, 2);
 
+        panel.AutoScroll = false;
         _monitorPanel = panel;
         return panel;
     }
@@ -525,6 +534,8 @@ internal sealed class MainForm : Form
             Padding = new Padding(Ui.SPACING / 2),
             BackColor = SystemColors.Window,
             CellBorderStyle = TableLayoutPanelCellBorderStyle.None,
+            AutoScroll = false,
+            MinimumSize = new Size(0, LogicalToDeviceUnits(142)),
         };
         card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
@@ -921,9 +932,9 @@ internal sealed class MainForm : Form
         _monitorGroup!.Visible = showsMonitor;
         _controlGroup!.Visible = showsTests;
         _resultGroup!.Visible = showsTests;
-        var onlyMonitor = showsMonitor && !showsTests && !showsHardware;
-        _rightPanel.RowStyles[0].SizeType = onlyMonitor ? SizeType.Percent : SizeType.Absolute;
-        _rightPanel.RowStyles[0].Height = onlyMonitor
+        _onlyMonitor = showsMonitor && !showsTests && !showsHardware;
+        _rightPanel.RowStyles[0].SizeType = _onlyMonitor ? SizeType.Percent : SizeType.Absolute;
+        _rightPanel.RowStyles[0].Height = _onlyMonitor
             ? 100
             : showsMonitor ? LogicalToDeviceUnits(MONITOR_SECTION_HEIGHT) : 0;
         _rightPanel.RowStyles[1].Height = showsTests
@@ -931,8 +942,9 @@ internal sealed class MainForm : Form
             : 0;
         _rightPanel.RowStyles[2].SizeType = showsTests ? SizeType.Percent : SizeType.Absolute;
         _rightPanel.RowStyles[2].Height = showsTests ? 100 : 0;
-        ApplyMonitorLayout(onlyMonitor);
         ApplyBodyWidths();
+        _monitorOneColumn = ShouldUseOneColumn();
+        ApplyMonitorLayout(_monitorOneColumn);
         UpdateCommandStates();
     }
 
@@ -953,6 +965,34 @@ internal sealed class MainForm : Form
         {
             SaveSettings(_settings with { IsMonitorPanelHidden = false });
         }
+    }
+
+    private bool ShouldUseOneColumn()
+    {
+        if (!_onlyMonitor)
+        {
+            return false;
+        }
+
+        var fanHeight = _fanCard is { Visible: true } ? LogicalToDeviceUnits(150) : 0;
+        return _rightPanel.ClientSize.Height >= LogicalToDeviceUnits(360) + fanHeight;
+    }
+
+    private void UpdateMonitorLayout()
+    {
+        if (_monitorPanel is null)
+        {
+            return;
+        }
+
+        var oneColumn = ShouldUseOneColumn();
+        if (oneColumn == _monitorOneColumn && _monitorPanel.ColumnCount == (oneColumn ? 1 : 2))
+        {
+            return;
+        }
+
+        _monitorOneColumn = oneColumn;
+        ApplyMonitorLayout(oneColumn);
     }
 
     private void ApplyMonitorLayout(bool oneColumn)
@@ -981,14 +1021,13 @@ internal sealed class MainForm : Form
         var cardRows = oneColumn ? cards.Length : 2;
         for (var row = 0; row < cardRows; row++)
         {
-            if (oneColumn)
+            if (oneColumn && cards[row] == _fanCard)
             {
-                // Absolute heights keep the value rows readable; the panel scrolls only when the window is too short.
-                panel.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(110)));
+                panel.RowStyles.Add(new RowStyle(SizeType.Absolute, _fanCard.Visible ? LogicalToDeviceUnits(150) : 0));
             }
             else
             {
-                panel.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+                panel.RowStyles.Add(new RowStyle(SizeType.Percent, oneColumn ? 100f / 3 : 50f));
             }
         }
 
@@ -1006,35 +1045,12 @@ internal sealed class MainForm : Form
             panel.SetColumnSpan(_systemCard, _fanCard.Visible ? 1 : 2);
         }
 
-        panel.AutoScroll = oneColumn;
-        panel.Resize -= SizeSingleColumnMonitor;
-        if (oneColumn)
-        {
-            panel.Resize += SizeSingleColumnMonitor;
-            SizeSingleColumnMonitor(panel, EventArgs.Empty);
-        }
-
+        // The monitor must never add scrollbars; switch between 1 and 2 columns before space runs out.
+        panel.AutoScroll = false;
+        panel.AutoScrollMinSize = Size.Empty;
+        panel.HorizontalScroll.Visible = false;
+        panel.VerticalScroll.Visible = false;
         panel.ResumeLayout();
-    }
-
-    private void SizeSingleColumnMonitor(object? sender, EventArgs e)
-    {
-        if (_monitorPanel is not { ColumnCount: 1 } panel || panel.RowStyles.Count < 4)
-        {
-            return;
-        }
-
-        var available = panel.ClientSize.Height - (_chartRow?.Height ?? 0);
-        var fanHeight = _fanCard is { Visible: true } ? LogicalToDeviceUnits(150) : 0;
-        var cardHeight = Math.Max(LogicalToDeviceUnits(110), (available - fanHeight) / 3);
-        for (var index = 0; index < 3; index++)
-        {
-            panel.RowStyles[index].SizeType = SizeType.Absolute;
-            panel.RowStyles[index].Height = cardHeight;
-        }
-
-        panel.RowStyles[3].SizeType = SizeType.Absolute;
-        panel.RowStyles[3].Height = fanHeight;
     }
 
     private void RestoreWindowState()
@@ -1764,7 +1780,7 @@ internal sealed class MainForm : Form
         }
 
         panel.ResumeLayout();
-        if (panel.ColumnCount == 1)
+        if (_monitorOneColumn)
         {
             ApplyMonitorLayout(oneColumn: true);
         }
