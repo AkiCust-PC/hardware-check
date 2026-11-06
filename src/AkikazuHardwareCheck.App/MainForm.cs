@@ -30,6 +30,10 @@ internal sealed class MainForm : Form
         (AppLanguage.ENGLISH, "English"),
     ];
 
+    // 16:10 desktop default. Resizing is independent in width and height, so no aspect-ratio lock is applied.
+    private const int DEFAULT_CLIENT_WIDTH = 1280;
+    private const int DEFAULT_CLIENT_HEIGHT = 800;
+
     private const int MONITOR_SECTION_HEIGHT = 229;
     private const int FAN_ROW_INDEX = 3;
     private const int METRIC_ROW_HEIGHT = 46;
@@ -151,8 +155,10 @@ internal sealed class MainForm : Form
         KeyPreview = true;
         DoubleBuffered = true;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(LogicalToDeviceUnits(1180), LogicalToDeviceUnits(800));
-        MinimumSize = new Size(LogicalToDeviceUnits(900), LogicalToDeviceUnits(720));
+        // 16:10 default: wide enough for the two information columns without squeezing the monitor.
+        ClientSize = new Size(LogicalToDeviceUnits(DEFAULT_CLIENT_WIDTH), LogicalToDeviceUnits(DEFAULT_CLIENT_HEIGHT));
+        // This tested size is also the minimum: both sides show their text, while width and height stay independent.
+        MinimumSize = Size;
 
         WireEvents();
         ApplyBackground();
@@ -167,6 +173,7 @@ internal sealed class MainForm : Form
     protected override void OnShown(EventArgs e)
     {
         base.OnShown(e);
+        ApplyBodyWidths();
         if (_startHidden && _settings is { ShowTrayIcon: true, CloseToTray: true })
         {
             HideToTray(showHint: false);
@@ -430,6 +437,7 @@ internal sealed class MainForm : Form
         body.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         body.Controls.Add(_hardwareGroup, 0, 0);
         body.Controls.Add(_rightPanel, 1, 0);
+        body.Resize += (_, _) => ApplyBodyWidths();
         _bodyPanel = body;
         return body;
     }
@@ -839,9 +847,32 @@ internal sealed class MainForm : Form
         var showsTests = !_settings.IsTestPanelHidden;
         hardware.Visible = showsHardware;
         _rightPanel.Visible = showsTests;
-        body.ColumnStyles[0].Width = !showsHardware ? 0 : showsTests ? 50 : 100;
-        body.ColumnStyles[1].Width = !showsTests ? 0 : showsHardware ? 50 : 100;
+        ApplyBodyWidths();
         UpdateCommandStates();
+    }
+
+    /// <summary>
+    /// An absolute split stops the long hardware values from making the left column wider than half. The info view
+    /// wraps its values instead, so both sides keep their text at the minimum window size.
+    /// </summary>
+    private void ApplyBodyWidths()
+    {
+        if (_bodyPanel is not { } body || _hardwareGroup is not { } hardware)
+        {
+            return;
+        }
+
+        var width = Math.Max(0, body.ClientSize.Width);
+        var showsHardware = hardware.Visible;
+        var showsTests = _rightPanel.Visible;
+        var left = !showsHardware ? 0 : showsTests ? width / 2 : width;
+        body.ColumnStyles[0].SizeType = SizeType.Absolute;
+        body.ColumnStyles[0].Width = left;
+        body.ColumnStyles[1].SizeType = SizeType.Absolute;
+        body.ColumnStyles[1].Width = Math.Max(0, width - left);
+        hardware.MaximumSize = new Size(left, 0);
+        _hardwareList.MaximumSize = new Size(Math.Max(1, left - (Ui.SPACING * 3)), 0);
+        _rightPanel.MaximumSize = new Size(Math.Max(0, width - left), 0);
     }
 
     private async Task ReloadHardwareAsync()

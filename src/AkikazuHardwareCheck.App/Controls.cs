@@ -13,6 +13,8 @@ internal sealed record InfoRow(string Label, string Value, Color? Color = null, 
 /// </summary>
 internal sealed class InfoView : Panel
 {
+    private const int LABEL_WIDTH = 110;
+
     private readonly TableLayoutPanel _table = new()
     {
         AutoSize = true,
@@ -28,6 +30,7 @@ internal sealed class InfoView : Panel
         _table.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         _table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         Controls.Add(_table);
+        Resize += (_, _) => ApplyWidthLimits();
     }
 
     public void SetRows(IReadOnlyList<InfoRow> rows)
@@ -52,6 +55,38 @@ internal sealed class InfoView : Panel
             }
 
             _table.Controls.Add(Cell(row.Value, row.Color ?? SystemColors.ControlText), 1, index);
+        }
+
+        _table.ResumeLayout();
+        ApplyWidthLimits();
+    }
+
+    /// <summary>
+    /// Keep the left panel from growing to the width of its longest value. Values wrap inside the available width
+    /// instead, so the monitor column still has room at the default window size.
+    /// </summary>
+    private void ApplyWidthLimits()
+    {
+        if (ClientSize.Width <= 1)
+        {
+            return;
+        }
+
+        var available = Math.Max(1, ClientSize.Width - SystemInformation.VerticalScrollBarWidth - (Ui.SPACING * 2));
+        var labelWidth = Math.Min(LogicalToDeviceUnits(LABEL_WIDTH), Math.Max(1, available / 3));
+        var valueWidth = Math.Max(1, available - labelWidth);
+        _table.SuspendLayout();
+        for (var row = 0; row < _table.RowCount; row++)
+        {
+            if (_table.GetControlFromPosition(0, row) is { } label)
+            {
+                label.MaximumSize = new Size(labelWidth, 0);
+            }
+
+            if (_table.GetControlFromPosition(1, row) is { } value)
+            {
+                value.MaximumSize = new Size(valueWidth, 0);
+            }
         }
 
         _table.ResumeLayout();
