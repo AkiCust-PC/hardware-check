@@ -11,6 +11,7 @@ namespace AkikazuHardwareCheck.App;
 internal static class ListViewTable
 {
     private const int LVM_FIRST = 0x1000;
+    private const int LVM_GETHEADER = LVM_FIRST + 31;
     private const int LVM_SETEXTENDEDLISTVIEWSTYLE = LVM_FIRST + 54;
     private const int LVS_EX_DOUBLEBUFFER = 0x00010000;
     private const int LVS_EX_HEADERDRAGDROP = 0x00000010;
@@ -56,6 +57,18 @@ internal static class ListViewTable
         list.MouseUp += (_, e) =>
         {
             if (e.Button != MouseButtons.Right)
+            {
+                return;
+            }
+
+            var header = SendMessage(list.Handle, LVM_GETHEADER, IntPtr.Zero, IntPtr.Zero);
+            if (header == IntPtr.Zero || !GetWindowRect(header, out var bounds))
+            {
+                return;
+            }
+
+            var screenPoint = list.PointToScreen(e.Location);
+            if (screenPoint.Y < bounds.Top || screenPoint.Y >= bounds.Bottom)
             {
                 return;
             }
@@ -142,6 +155,18 @@ internal static class ListViewTable
 
     [DllImport("user32.dll")]
     private static extern IntPtr SendMessage(IntPtr window, int message, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr window, out Rect bounds);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Rect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
 
     private sealed record SortState(int Column, bool Ascending);
 
