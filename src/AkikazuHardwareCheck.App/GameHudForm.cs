@@ -130,13 +130,33 @@ internal sealed class GameHudForm : Form
             return;
         }
 
-        using var font = new Font(Font.FontFamily, _fontSize, FontStyle.Bold, GraphicsUnit.Point);
+        using var font = FitFont(e.Graphics, text);
         using var shadow = new SolidBrush(Color.FromArgb(190, 0, 0, 0));
         using var foreground = new SolidBrush(_color);
         var size = e.Graphics.MeasureString(text, font);
         var x = Math.Max(4f, (ClientSize.Width - size.Width) / 2f);
         e.Graphics.DrawString(text, font, shadow, x + 1, 1);
         e.Graphics.DrawString(text, font, foreground, x, 0);
+    }
+
+    /// <summary>Shrinks the strip when the selected items are wider than the screen instead of cutting either end.</summary>
+    private Font FitFont(Graphics graphics, string text)
+    {
+        var size = (float)_fontSize;
+        var available = Math.Max(1, ClientSize.Width - 8);
+        while (size > 7f)
+        {
+            var font = new Font(Font.FontFamily, size, FontStyle.Bold, GraphicsUnit.Point);
+            if (graphics.MeasureString(text, font).Width <= available)
+            {
+                return font;
+            }
+
+            font.Dispose();
+            size -= 0.5f;
+        }
+
+        return new Font(Font.FontFamily, 7f, FontStyle.Bold, GraphicsUnit.Point);
     }
 
     private void AddPercent(ICollection<string> parts, int item, string label, double? value)

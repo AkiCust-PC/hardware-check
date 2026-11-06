@@ -52,12 +52,19 @@ internal sealed class NativeMenu
 
     private readonly IntPtr _bar = CreateMenu();
 
-    public IntPtr AddSubmenu(string text)
+    public IntPtr AddSubmenu(string text) => AddPopup(_bar, text);
+
+    /// <summary>A submenu below another submenu, for tools that belong inside the Tools menu.</summary>
+    public static IntPtr AddPopup(IntPtr parent, string text)
     {
         var submenu = CreatePopupMenu();
-        AppendMenuW(_bar, MF_POPUP, submenu, text);
+        AppendMenuW(parent, MF_POPUP, submenu, text);
         return submenu;
     }
+
+    /// <summary>A command directly on the menu bar, used by Settings so it does not become a one-item submenu.</summary>
+    public void AddBarItem(MenuCommand command, string text) =>
+        AppendMenuW(_bar, MF_STRING, (int)command, text);
 
     public static void AddItem(IntPtr submenu, MenuCommand command, string text) =>
         AppendMenuW(submenu, MF_STRING, (IntPtr)(int)command, text);

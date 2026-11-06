@@ -909,14 +909,13 @@ internal sealed class MainForm : Form
         NativeMenu.AddItem(tools, MenuCommand.TestWindow, _t["ui.testWindow"]);
         NativeMenu.AddItem(tools, MenuCommand.HardwareWindow, _t["ui.hardwareWindow"]);
         NativeMenu.AddSeparator(tools);
-        var keyboardLayouts = menu.AddSubmenu(_t["ui.keyboardLayout"]);
+        var keyboardLayouts = NativeMenu.AddPopup(tools, _t["ui.keyboardLayout"]);
         for (var index = 0; index < KeyboardLayouts.Choices.Count; index++)
         {
             NativeMenu.AddItem(keyboardLayouts, MenuCommand.FirstKeyboardLayout + index, KeyboardLayouts.Choices[index].Label(_t));
         }
 
-        var settings = menu.AddSubmenu(_t["ui.menuSettings"]);
-        NativeMenu.AddItem(settings, MenuCommand.Settings, _t["ui.settings"]);
+        menu.AddBarItem(MenuCommand.Settings, _t["ui.settings"]);
 
         var view = menu.AddSubmenu(_t["ui.menuView"]);
         NativeMenu.AddItem(view, MenuCommand.ShowHardware, _t["ui.showHardware"]);

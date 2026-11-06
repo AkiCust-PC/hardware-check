@@ -13,8 +13,8 @@ internal sealed class SettingsForm : Form
     private const int MAX_LIMIT_CELSIUS = 110;
     private const int LABEL_WIDTH = 220;
     private const int FOLDER_BOX_WIDTH = 330;
-    private const int TAB_WIDTH = 720;
-    private const int TAB_HEIGHT = 390;
+    private const int TAB_WIDTH = 760;
+    private const int TAB_HEIGHT = 560;
     private const string LICENSE_PREFIX = "license.";
 
     private readonly AppSettings _original;
