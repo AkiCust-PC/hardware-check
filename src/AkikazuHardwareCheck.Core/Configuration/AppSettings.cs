@@ -64,7 +64,7 @@ public sealed record AppSettings(
     bool HudEnabled = false,
     int HudFontSize = 12,
     int HudColorArgb = unchecked((int)0xFFFFFFFF),
-    int HudItems = 31,
+    int HudItems = (1 << 5) - 1 | (1 << 10) | (1 << 13),
     bool RulerEnabled = false,
     int RulerColorArgb = unchecked((int)0xDCFF5050),
     int RulerOpacity = 85,

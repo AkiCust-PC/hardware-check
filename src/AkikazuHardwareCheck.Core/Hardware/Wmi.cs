@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Management;
 
 namespace AkikazuHardwareCheck.Core.Hardware;
@@ -31,9 +32,28 @@ internal static class Wmi
     public static string? Text(ManagementBaseObject item, string property) =>
         HardwareText.Clean(item[property] as string);
 
-    public static ulong? Number(ManagementBaseObject item, string property) =>
-        item[property] is { } value ? Convert.ToUInt64(value) : null;
+    public static ulong? Number(ManagementBaseObject item, string property)
+    {
+        try
+        {
+            return item[property] is { } value ? Convert.ToUInt64(value, CultureInfo.InvariantCulture) : null;
+        }
+        catch (Exception exception) when (exception is FormatException or InvalidCastException or OverflowException or ArgumentException)
+        {
+            // One malformed property must not drop the whole device list from its source.
+            return null;
+        }
+    }
 
-    public static int? Integer(ManagementBaseObject item, string property) =>
-        item[property] is { } value ? Convert.ToInt32(value) : null;
+    public static int? Integer(ManagementBaseObject item, string property)
+    {
+        try
+        {
+            return item[property] is { } value ? Convert.ToInt32(value, CultureInfo.InvariantCulture) : null;
+        }
+        catch (Exception exception) when (exception is FormatException or InvalidCastException or OverflowException or ArgumentException)
+        {
+            return null;
+        }
+    }
 }

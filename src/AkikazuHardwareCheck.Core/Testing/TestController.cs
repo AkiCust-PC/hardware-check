@@ -124,10 +124,16 @@ public sealed class TestController(
         var cpuLoad = SensorStats(samples, CpuLoadSelector);
         var hasTemperature = HasSufficient(samples, plan, seconds, CpuTemperatureSelector) || HasSufficient(samples, plan, seconds, GpuTemperatureSelector(plan));
         var isStopped = cancellationToken.IsCancellationRequested;
-        var isBusy = cpuLoad.Average > IDLE_MAX_CPU_LOAD_PERCENT;
+        var isLoadKnown = cpuLoad.Average is not null;
+        var isBusy = cpuLoad.Average is { } average && average > IDLE_MAX_CPU_LOAD_PERCENT;
         if (isBusy)
         {
             AddAnomaly(AnomalyCode.IdleConditionNotMet, TestPhase.Idle, FormattableString.Invariant($"{cpuLoad.Average:0.#} %"));
+        }
+
+        if (!isLoadKnown && !isStopped)
+        {
+            AddAnomaly(AnomalyCode.LoadUnverified, TestPhase.Idle, null);
         }
 
         if (!hasTemperature && !isStopped)
@@ -140,11 +146,12 @@ public sealed class TestController(
             AddAnomaly(AnomalyCode.UserStopped, TestPhase.Idle, null);
         }
 
-        var status = (isStopped, isBusy, hasTemperature) switch
+        var status = (isStopped, isBusy, hasTemperature, isLoadKnown) switch
         {
-            (true, _, _) => TestStatus.Cancelled,
-            (_, true, _) => TestStatus.Incomplete,
-            (_, _, false) => TestStatus.InsufficientData,
+            (true, _, _, _) => TestStatus.Cancelled,
+            (_, true, _, _) => TestStatus.Incomplete,
+            (_, _, false, _) => TestStatus.InsufficientData,
+            (_, _, _, false) => TestStatus.InsufficientData,
             _ => TestStatus.Passed,
         };
 

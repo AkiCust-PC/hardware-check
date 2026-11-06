@@ -97,7 +97,7 @@ public static partial class PeripheralCollector
         return distinct
             .Where(item => item.Name is not null || !namedKinds.Contains(item.Kind))
             .OrderBy(item => item.Kind)
-            .ThenBy(item => item.Name, StringComparer.CurrentCulture)
+            .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 

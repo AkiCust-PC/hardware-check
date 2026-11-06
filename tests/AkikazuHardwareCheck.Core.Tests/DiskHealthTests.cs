@@ -99,6 +99,15 @@ public class DiskHealthTests
         Assert.Equal(DiskHealthStatus.Bad, DiskHealthCollector.JudgeAta(0, 0, 0, 90, true).Status);
     }
 
+    [Fact]
+    public void AtaWithNoSmartDataIsUnknownRatherThanGood()
+    {
+        var (status, findings) = DiskHealthCollector.JudgeAta(null, null, null, null, false);
+
+        Assert.Equal(DiskHealthStatus.Unknown, status);
+        Assert.Contains(DiskFinding.NotReadable, findings);
+    }
+
     [Theory]
     [MemberData(nameof(LocalizationTests.Languages), MemberType = typeof(LocalizationTests))]
     public void EveryStatusAndFindingHasText(string language)

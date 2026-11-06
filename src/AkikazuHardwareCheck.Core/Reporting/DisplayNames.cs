@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using AkikazuHardwareCheck.Core.Localization;
 
 namespace AkikazuHardwareCheck.Core.Reporting;
 
@@ -12,6 +13,24 @@ public static partial class DisplayNames
         var words = $"{brand} {model}".Split([' ', '_'], StringSplitOptions.RemoveEmptyEntries);
         return string.Join(" ", words.Distinct(StringComparer.OrdinalIgnoreCase));
     }
+
+    /// <summary>Output technology names, so the report does not leak the English enum spelling into ja/zh text.</summary>
+    public static string? Connection(Translator t, string? connection) => connection switch
+    {
+        null => null,
+        "VGA" => t["display.connection.vga"],
+        "DVI" => t["display.connection.dvi"],
+        "HDMI" => t["display.connection.hdmi"],
+        "LVDS" => t["display.connection.lvds"],
+        "DisplayPort" => t["display.connection.displayPort"],
+        "Embedded DisplayPort" => t["display.connection.embeddedDisplayPort"],
+        "Embedded UDI" => t["display.connection.embeddedUdi"],
+        "Miracast" => t["display.connection.miracast"],
+        "Indirect" => t["display.connection.indirect"],
+        "USB-C DisplayPort" => t["display.connection.usbCDisplayPort"],
+        "Internal" => t["display.internal"],
+        _ => connection,
+    };
 
     /// <summary>The encoding older programs use on this system, by its usual name.</summary>
     public static string EncodingName(int codePage) => codePage switch

@@ -142,8 +142,8 @@ static async Task<TestRunResult> RunTestAsync(string[] parts, TestProfile profil
     {
         ConfirmUnmonitored = (_, _) => Task.FromResult(allowUnmonitored),
     };
-    controller.ProgressChanged += progress => Console.Error.WriteLine(
-        $"{progress.Phase} {progress.PhaseElapsedSeconds:0}/{progress.PhasePlannedSeconds:0}s CPU {progress.CpuTemperature:0.#}°C {progress.CpuLoad:0}% GPU {progress.GpuTemperature:0.#}°C {progress.GpuLoad:0}%");
+    controller.ProgressChanged += progress => Console.Error.WriteLine(FormattableString.Invariant(
+        $"{progress.Phase} {progress.PhaseElapsedSeconds:0}/{progress.PhasePlannedSeconds:0}s CPU {progress.CpuTemperature:0.#}°C {progress.CpuLoad:0}% GPU {progress.GpuTemperature:0.#}°C {progress.GpuLoad:0}%"));
 
     var plan = new TestPlan(profile, parts.Contains("idle"), parts.Contains("gpu"), parts.Contains("cpu"), GpuInfoCollector.DefaultStressTarget(gpus));
     return await controller.RunAsync(plan, stop.Token);

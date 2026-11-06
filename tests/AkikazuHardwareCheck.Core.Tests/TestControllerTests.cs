@@ -37,7 +37,15 @@ public class TestControllerTests
     public async Task HealthyRunPassesAndKeepsPhasesInOrder()
     {
         var order = new List<string>();
-        var result = await Run(new FakeSensors(), new FakeLoad(Completed(), () => order.Add("gpu")), new FakeLoad(Completed(), () => order.Add("cpu")));
+        var sensors = new FakeSensors { CpuLoad = 5 };
+        var result = await Run(
+            sensors,
+            new FakeLoad(Completed(), () => order.Add("gpu")),
+            new FakeLoad(Completed(), () =>
+            {
+                order.Add("cpu");
+                sensors.CpuLoad = 95;
+            }));
 
         Assert.Equal(OverallResult.NoObviousIssue, result.Overall);
         Assert.Equal(["gpu", "cpu"], order);

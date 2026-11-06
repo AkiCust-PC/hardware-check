@@ -4,9 +4,30 @@ using AkikazuHardwareCheck.Core.Monitoring;
 
 namespace AkikazuHardwareCheck.App;
 
-/// <summary>A lightweight top-center transparent text strip. It only reads the existing live snapshot.</summary>
+/// <summary>
+/// A lightweight top-center transparent text strip. It only reads the existing live snapshot; it never opens a
+/// sensor source and never touches a game process.
+/// </summary>
 internal sealed class GameHudForm : Form
 {
+    public const int CPU_LOAD = 1 << 0;
+    public const int CPU_TEMPERATURE = 1 << 1;
+    public const int GPU_LOAD = 1 << 2;
+    public const int GPU_TEMPERATURE = 1 << 3;
+    public const int MEMORY = 1 << 4;
+    public const int RESOLUTION = 1 << 5;
+    public const int REFRESH_RATE = 1 << 6;
+    public const int CPU_CLOCK = 1 << 7;
+    public const int CPU_POWER = 1 << 8;
+    public const int GPU_CLOCK = 1 << 9;
+    public const int GPU_POWER = 1 << 10;
+    public const int GPU_MEMORY = 1 << 11;
+    public const int DISK = 1 << 12;
+    public const int LATENCY = 1 << 13;
+
+    private const int BYTES_PER_GIB = 1024 * 1024 * 1024;
+    private const int HUD_HEIGHT = 42;
+
     private readonly Translator _t;
     private readonly Func<LiveSnapshot> _readSnapshot;
     private readonly int _fontSize;
@@ -32,7 +53,7 @@ internal sealed class GameHudForm : Form
         TransparencyKey = Color.Fuchsia;
         DoubleBuffered = true;
         var screen = Screen.PrimaryScreen?.Bounds ?? new Rectangle(0, 0, 1920, 1080);
-        Bounds = new Rectangle(screen.Left, screen.Top, screen.Width, LogicalToDeviceUnits(42));
+        Bounds = new Rectangle(screen.Left, screen.Top, screen.Width, LogicalToDeviceUnits(HUD_HEIGHT));
         _timer.Tick += (_, _) =>
         {
             _sample = _readSnapshot();
@@ -43,7 +64,16 @@ internal sealed class GameHudForm : Form
             _sample = _readSnapshot();
             _timer.Start();
         };
-        FormClosed += (_, _) => _timer.Dispose();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _timer.Dispose();
+        }
+
+        base.Dispose(disposing);
     }
 
     protected override bool ShowWithoutActivation => true;
@@ -68,35 +98,39 @@ internal sealed class GameHudForm : Form
         }
 
         var parts = new List<string>();
-        if ((_items & 1) != 0) Add(parts, "CPU", sample.CpuLoad, "%");
-        if ((_items & 2) != 0) Add(parts, string.Empty, sample.CpuTemperature, "°C");
-        if ((_items & 4) != 0) Add(parts, "GPU", sample.GpuLoad, "%");
-        if ((_items & 8) != 0) Add(parts, string.Empty, sample.GpuTemperature, "°C");
-        if ((_items & 16) != 0) Add(parts, "MEM", sample.MemoryLoad, "%");
-        if ((_items & 32) != 0)
+        AddPercent(parts, CPU_LOAD, _t["hud.label.cpu"], sample.CpuLoad);
+        AddValue(parts, CPU_TEMPERATURE, _t["hud.label.cpu"], sample.CpuTemperature, "0", "°C");
+        AddClock(parts, CPU_CLOCK, _t["hud.label.cpu"], sample.CpuClockMhz);
+        AddValue(parts, CPU_POWER, _t["hud.label.cpu"], sample.CpuPowerWatts, "0", "W");
+        AddPercent(parts, GPU_LOAD, _t["hud.label.gpu"], sample.GpuLoad);
+        AddValue(parts, GPU_TEMPERATURE, _t["hud.label.gpu"], sample.GpuTemperature, "0", "°C");
+        AddClock(parts, GPU_CLOCK, _t["hud.label.gpu"], sample.GpuClockMhz);
+        AddValue(parts, GPU_POWER, _t["hud.label.gpu"], sample.GpuPowerWatts, "0", "W");
+        AddPercent(parts, MEMORY, _t["hud.label.memory"], sample.MemoryLoad);
+        AddMemory(parts, sample);
+        AddPercent(parts, DISK, _t["hud.label.disk"], sample.DiskBusy);
+        AddValue(parts, LATENCY, _t["hud.label.latency"], sample.LatencyMilliseconds, "0", "ms");
+        if ((_items & RESOLUTION) != 0 && Screen.PrimaryScreen?.Bounds is { } area)
         {
-            var bounds = Screen.PrimaryScreen?.Bounds;
-            if (bounds is { } area)
-            {
-                parts.Add($"{area.Width}x{area.Height}");
-            }
+            parts.Add($"{area.Width}x{area.Height}");
         }
 
-        if ((_items & 64) != 0)
+        if ((_items & REFRESH_RATE) != 0)
         {
             var refresh = DisplayInfoForm.GetRefreshRate();
             if (refresh > 0)
             {
-                parts.Add($"{refresh} Hz");
+                parts.Add($"{refresh.ToString(CultureInfo.InvariantCulture)}Hz");
             }
         }
+
         var text = string.Join("   ", parts);
         if (text.Length == 0)
         {
             return;
         }
 
-        using var font = new Font("Segoe UI", _fontSize, FontStyle.Bold, GraphicsUnit.Point);
+        using var font = new Font(Font.FontFamily, _fontSize, FontStyle.Bold, GraphicsUnit.Point);
         using var shadow = new SolidBrush(Color.FromArgb(190, 0, 0, 0));
         using var foreground = new SolidBrush(_color);
         var size = e.Graphics.MeasureString(text, font);
@@ -105,11 +139,44 @@ internal sealed class GameHudForm : Form
         e.Graphics.DrawString(text, font, foreground, x, 0);
     }
 
-    private static void Add(ICollection<string> parts, string label, double? value, string unit)
+    private void AddPercent(ICollection<string> parts, int item, string label, double? value)
     {
-        if (value is { } number)
+        if ((_items & item) != 0 && value is { } number)
         {
-            parts.Add($"{(label.Length == 0 ? string.Empty : label + " ")}{number.ToString("0", CultureInfo.InvariantCulture)}{unit}");
+            parts.Add($"{label} {number.ToString("0", CultureInfo.InvariantCulture)}%");
+        }
+    }
+
+    private void AddValue(ICollection<string> parts, int item, string label, double? value, string format, string unit)
+    {
+        if ((_items & item) != 0 && value is { } number)
+        {
+            parts.Add($"{label} {number.ToString(format, CultureInfo.InvariantCulture)}{unit}");
+        }
+    }
+
+    private void AddClock(ICollection<string> parts, int item, string label, double? megahertz)
+    {
+        if ((_items & item) != 0 && megahertz is { } value and > 0)
+        {
+            parts.Add($"{label} {(value / 1000).ToString("0.0", CultureInfo.InvariantCulture)}GHz");
+        }
+    }
+
+    private void AddMemory(ICollection<string> parts, LiveSnapshot sample)
+    {
+        if ((_items & GPU_MEMORY) == 0)
+        {
+            return;
+        }
+
+        if (sample.GpuMemoryUsedBytes is { } used && sample.GpuMemoryTotalBytes is { } total and > 0)
+        {
+            parts.Add($"{_t["hud.label.vram"]} {(used / total * 100).ToString("0", CultureInfo.InvariantCulture)}%");
+        }
+        else if (sample.GpuMemoryUsedBytes is { } usedBytes)
+        {
+            parts.Add($"{_t["hud.label.vram"]} {(usedBytes / BYTES_PER_GIB).ToString("0.0", CultureInfo.InvariantCulture)}GB");
         }
     }
 }

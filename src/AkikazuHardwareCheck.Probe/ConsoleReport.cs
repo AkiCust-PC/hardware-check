@@ -1,5 +1,7 @@
+using System.Globalization;
 using AkikazuHardwareCheck.Core.Localization;
 using AkikazuHardwareCheck.Core.Models;
+using AkikazuHardwareCheck.Core.Reporting;
 
 namespace AkikazuHardwareCheck.Probe;
 
@@ -104,10 +106,10 @@ public sealed class ConsoleReport(Translator t, TextWriter output)
     private string FormatDisplay(DisplayInfo display)
     {
         var name = Text(display.Name) + (display.ManufacturerCode is null ? "" : $" ({display.ManufacturerCode}{display.ProductCode})");
-        var mode = $"{Resolution(display)} @ {(display.RefreshRateHz is { } rate ? $"{rate} Hz" : Unavailable)}";
-        var size = display.DiagonalInches is { } inches ? t["display.inches", inches] : t["display.sizeUnavailable"];
+        var mode = $"{Resolution(display)} @ {(display.RefreshRateHz is { } rate ? $"{rate.ToString("0.#", CultureInfo.InvariantCulture)} Hz" : Unavailable)}";
+        var size = display.DiagonalInches is { } inches ? t["display.inches", inches.ToString("0.#", CultureInfo.InvariantCulture)] : t["display.sizeUnavailable"];
         var primary = display.IsPrimary ? t["display.primary"] : "";
-        return $"{name} | {mode} | {size} | {Text(display.Connection)}{primary} | {t["display.connectedGpu", Text(display.ConnectedGpu)]}";
+        return $"{name} | {mode} | {size} | {DisplayNames.Connection(t, display.Connection)}{primary} | {t["display.connectedGpu", Text(display.ConnectedGpu)]}";
     }
 
     private void WriteSensors(IReadOnlyList<SensorReading> sensors)
@@ -119,7 +121,7 @@ public sealed class ConsoleReport(Translator t, TextWriter output)
             .ToList();
 
         WriteSection(t["section.sensors", sensors.Count], shown, sensor =>
-            $"{sensor.HardwareName} / {sensor.SensorName}: {(sensor.Status == SensorStatus.Ok ? $"{sensor.Value:0.#} {sensor.Unit}" : t["sensor.invalid"])}");
+            $"{sensor.HardwareName} / {sensor.SensorName}: {(sensor.Status == SensorStatus.Ok ? $"{sensor.Value!.Value.ToString("0.#", CultureInfo.InvariantCulture)} {sensor.Unit}" : t["sensor.invalid"])}");
     }
 
     private void WriteTestRun(TestRunResult run)
@@ -128,12 +130,21 @@ public sealed class ConsoleReport(Translator t, TextWriter output)
         output.WriteLine($"[{t["test.heading"]}] {EnumText.Overall(t, run.Overall)}");
         foreach (var phase in run.Phases)
         {
-            output.WriteLine($"  {EnumText.Phase(t, phase.Phase)}: {EnumText.Status(t, phase.Status)} | {phase.ActualSeconds:0}/{phase.PlannedSeconds:0} s | {(phase.AverageLoadPercent is { } load ? $"{load:0} %" : Unavailable)}");
+            var loadText = phase.AverageLoadPercent is { } load
+                ? load.ToString("0", CultureInfo.InvariantCulture) + " %"
+                : Unavailable;
+            output.WriteLine(FormattableString.Invariant($"  {EnumText.Phase(t, phase.Phase)}: {EnumText.Status(t, phase.Status)} | {phase.ActualSeconds:0}/{phase.PlannedSeconds:0} s | {loadText}"));
         }
 
         foreach (var item in run.Statistics.Where(item => item.SensorType == "Temperature" && item.Average is not null && item.Phase != TestPhase.Finished))
         {
-            output.WriteLine($"  {EnumText.Phase(t, item.Phase)} {item.HardwareName} / {item.SensorName}: {t["test.statistics", $"{item.Minimum:0.#}", $"{item.Maximum:0.#}", $"{item.Average:0.#}", item.ValidSamples]}");
+            var statistics = t[
+                "test.statistics",
+                item.Minimum?.ToString("0.#", CultureInfo.InvariantCulture) ?? "",
+                item.Maximum?.ToString("0.#", CultureInfo.InvariantCulture) ?? "",
+                item.Average?.ToString("0.#", CultureInfo.InvariantCulture) ?? "",
+                item.ValidSamples];
+            output.WriteLine(FormattableString.Invariant($"  {EnumText.Phase(t, item.Phase)} {item.HardwareName} / {item.SensorName}: {statistics}"));
         }
 
         foreach (var anomaly in run.Anomalies)
@@ -196,14 +207,20 @@ public sealed class ConsoleReport(Translator t, TextWriter output)
 
     private string Text(string? value) => value ?? Unavailable;
 
-    private string Gib(ulong? bytes) => bytes is { } value ? $"{value / BYTES_PER_GIB:0.#} GB" : Unavailable;
+    private string Gib(ulong? bytes) => bytes is { } value
+        ? FormattableString.Invariant($"{value / BYTES_PER_GIB:0.#} GB")
+        : Unavailable;
 
-    private string Gb(ulong? bytes) => bytes is { } value ? $"{value / BYTES_PER_GB:0} GB" : Unavailable;
+    private string Gb(ulong? bytes) => bytes is { } value
+        ? FormattableString.Invariant($"{value / BYTES_PER_GB:0} GB")
+        : Unavailable;
 
-    private string Mts(int? speed) => speed is { } value ? $"{value} MT/s" : Unavailable;
+    private string Mts(int? speed) => speed is { } value ? FormattableString.Invariant($"{value} MT/s") : Unavailable;
 
-    private string Rpm(double? rpm) => rpm is { } value ? $"{value:0} RPM" : t["cooling.noRpm"];
+    private string Rpm(double? rpm) => rpm is { } value ? FormattableString.Invariant($"{value:0} RPM") : t["cooling.noRpm"];
 
     private string Resolution(DisplayInfo display) =>
-        display.WidthPixels is { } width && display.HeightPixels is { } height ? $"{width}x{height}" : Unavailable;
+        display.WidthPixels is { } width && display.HeightPixels is { } height
+            ? FormattableString.Invariant($"{width}x{height}")
+            : Unavailable;
 }

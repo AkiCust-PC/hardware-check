@@ -1,10 +1,17 @@
+using System.Net;
 using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using AkikazuHardwareCheck.Core.Hardware;
 
 namespace AkikazuHardwareCheck.Core.Monitoring;
 
-public sealed record ActivitySnapshot(int? MemoryLoadPercent, double? DiskBusyPercent, double? UploadBytesPerSecond, double? DownloadBytesPerSecond, string? NetworkAdapter = null);
+public sealed record ActivitySnapshot(
+    int? MemoryLoadPercent,
+    double? DiskBusyPercent,
+    double? UploadBytesPerSecond,
+    double? DownloadBytesPerSecond,
+    string? NetworkAdapter = null,
+    double? LatencyMilliseconds = null);
 
 /// <summary>
 /// Reads memory, disk and network activity once a second from Windows itself. None of these need administrator rights,
@@ -16,6 +23,8 @@ public sealed class ActivityMonitor : IDisposable
     private const uint PDH_FMT_DOUBLE = 0x200;
     private const double FULL_PERCENT = 100;
     private const int ADAPTER_REFRESH_TICKS = 5;
+    private const int LATENCY_REFRESH_TICKS = 5;
+    private const int LATENCY_TIMEOUT_MS = 300;
 
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(1);
 
@@ -26,6 +35,8 @@ public sealed class ActivityMonitor : IDisposable
     private NetworkInterface? _adapter;
     private string? _adapterName;
     private int _ticksUntilRefresh;
+    private int _ticksUntilLatency;
+    private double? _latencyMilliseconds;
     private long? _lastSent;
     private long? _lastReceived;
     private DateTime _lastSampleAt;
@@ -55,10 +66,18 @@ public sealed class ActivityMonitor : IDisposable
     public void Dispose()
     {
         _stop.Set();
-        _thread?.Join(Interval * 2);
+        var stopped = _thread is null || _thread.Join(Interval * 2);
+        // Closing the PDH query or freeing the event while the monitor thread is still in it would be a use-after-free.
+        // If the join timed out, the process is exiting anyway and the OS reclaims both handles.
+        if (!stopped)
+        {
+            return;
+        }
+
         if (_query != IntPtr.Zero)
         {
             _ = PdhCloseQuery(_query);
+            _query = IntPtr.Zero;
         }
 
         _stop.Dispose();
@@ -70,7 +89,17 @@ public sealed class ActivityMonitor : IDisposable
         while (!_stop.IsSet)
         {
             var (upload, download) = ReadNetwork();
-            Sampled?.Invoke(new ActivitySnapshot(ReadMemoryLoad(), ReadDiskBusy(), upload, download, _adapterName));
+            var latency = ReadLatency();
+            try
+            {
+                Sampled?.Invoke(new ActivitySnapshot(ReadMemoryLoad(), ReadDiskBusy(), upload, download, _adapterName, latency));
+            }
+            catch (Exception exception)
+            {
+                // A subscriber must not terminate the monitor thread; the next tick can still provide data.
+                System.Diagnostics.Trace.TraceWarning(exception.Message);
+            }
+
             _stop.Wait(Interval);
         }
     }
@@ -177,6 +206,39 @@ public sealed class ActivityMonitor : IDisposable
         {
             return (null, null);
         }
+    }
+
+    /// <summary>
+    /// Round-trip time to the default gateway, refreshed every few seconds. This is the local network path only; it is
+    /// not the game server's latency and must not be presented as one.
+    /// </summary>
+    private double? ReadLatency()
+    {
+        if (_ticksUntilLatency-- > 0)
+        {
+            return _latencyMilliseconds;
+        }
+
+        _ticksUntilLatency = LATENCY_REFRESH_TICKS;
+        try
+        {
+            var gateway = _adapter?.GetIPProperties().GatewayAddresses.FirstOrDefault()?.Address;
+            if (gateway is null)
+            {
+                _latencyMilliseconds = null;
+                return null;
+            }
+
+            using var ping = new Ping();
+            var reply = ping.Send(gateway, LATENCY_TIMEOUT_MS);
+            _latencyMilliseconds = reply.Status == IPStatus.Success ? reply.RoundtripTime : null;
+        }
+        catch (Exception exception) when (exception is NetworkInformationException or PingException or InvalidOperationException or PlatformNotSupportedException)
+        {
+            _latencyMilliseconds = null;
+        }
+
+        return _latencyMilliseconds;
     }
 
     [StructLayout(LayoutKind.Sequential)]

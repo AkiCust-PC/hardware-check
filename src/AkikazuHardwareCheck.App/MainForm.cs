@@ -103,7 +103,6 @@ internal sealed class MainForm : Form
     private TableLayoutPanel? _rootPanel;
     private TableLayoutPanel? _bodyPanel;
     private TableLayoutPanel? _monitorPanel;
-    private Control? _chartRow;
     private bool _onlyMonitor;
     private bool _monitorOneColumn;
     private Control? _cpuCard;
@@ -155,6 +154,7 @@ internal sealed class MainForm : Form
     private bool _closeAfterTest;
     private NotifyIcon? _trayIcon;
     private ContextMenuStrip? _trayMenu;
+    private ContextMenuStrip? _contextMenu;
     private ToolStripMenuItem? _trayCrosshairItem;
     private string? _trayMenuLanguage;
     private uint _taskbarCreatedMessage;
@@ -169,6 +169,8 @@ internal sealed class MainForm : Form
             : AppLanguage.FromCulture(CultureInfo.CurrentUICulture.Name));
 
         Controls.Add(BuildRootPanel());
+        BuildContextMenu();
+        AttachContextMenu(this);
         Ui.ScaleButtons(this);
         ScaleLayout();
 
@@ -342,6 +344,8 @@ internal sealed class MainForm : Form
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         DisposeTrayIcon();
+        _contextMenu?.Dispose();
+        _contextMenu = null;
         base.OnFormClosed(e);
     }
 
@@ -488,6 +492,37 @@ internal sealed class MainForm : Form
         return item;
     }
 
+    private void BuildContextMenu()
+    {
+        _contextMenu = new ContextMenuStrip();
+        var cleanup = new ToolStripMenuItem(_t["ui.junkCleanup"]);
+        cleanup.Click += (_, _) => ShowJunkCleanup();
+        _contextMenu.Items.Add(cleanup);
+    }
+
+    /// <summary>
+    /// A WinForms menu belongs to one control, so the same menu is attached to every surface. Text boxes keep their
+    /// own copy/paste menu; on a gaming tool nothing else needs one.
+    /// </summary>
+    private void AttachContextMenu(Control parent)
+    {
+        if (parent is not (TextBoxBase or ComboBox))
+        {
+            parent.ContextMenuStrip = _contextMenu;
+        }
+
+        foreach (Control child in parent.Controls)
+        {
+            AttachContextMenu(child);
+        }
+    }
+
+    private void ShowJunkCleanup()
+    {
+        using var form = new JunkCleanupForm(_t, Font);
+        form.ShowDialog(this);
+    }
+
     private static string? Number(double? value) => value?.ToString("0.#", CultureInfo.InvariantCulture);
 
     private static string Format(double? value, string format, string unit) =>
@@ -549,7 +584,8 @@ internal sealed class MainForm : Form
         _chartButton.MinimumSize = new Size(0, Ui.BUTTON_MIN_HEIGHT);
         _chartButton.Margin = new Padding(0);
         _chartButton.Click += (_, _) => ShowLiveChart();
-        _monitorGroup = Ui.Section(null, BuildMonitorPanel());
+        // The live-chart button lives in the section header so a short window can never cover it with a card.
+        _monitorGroup = Ui.Section(_chartButton, BuildMonitorPanel());
         // The monitor section must fill its row; AutoSize lets the cards collapse and clip their bars.
         _monitorGroup.AutoSize = false;
         _controlGroup = Ui.Section(null, BuildControlPanel());
@@ -614,12 +650,11 @@ internal sealed class MainForm : Form
 
     private TableLayoutPanel BuildMonitorPanel()
     {
-        var panel = new TableLayoutPanel { ColumnCount = 2, RowCount = 3, Margin = new Padding(0) };
+        var panel = new TableLayoutPanel { ColumnCount = 2, RowCount = 2, Margin = new Padding(0) };
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         _cpuCard = BuildMetricCard("\uE950", _t["monitor.cpu"], out _cpuCardTitle,
             [_cpuTemperatureTile, _cpuLoadTile, _cpuVoltageTile, _cpuClockTile]);
@@ -634,12 +669,6 @@ internal sealed class MainForm : Form
         panel.Controls.Add(_gpuCard, 1, 0);
         panel.Controls.Add(_systemCard, 0, 1);
         panel.Controls.Add(_fanCard, 1, 1);
-
-        var chartRow = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false, Margin = new Padding(0, Ui.SPACING / 2, 0, 0) };
-        chartRow.Controls.Add(_chartButton);
-        _chartRow = chartRow;
-        panel.Controls.Add(chartRow, 0, 2);
-        panel.SetColumnSpan(chartRow, 2);
 
         panel.AutoScroll = false;
         _monitorPanel = panel;
@@ -879,18 +908,18 @@ internal sealed class MainForm : Form
         NativeMenu.AddItem(tools, MenuCommand.NetworkSpeedTest, _t["networkTest.title"]);
         NativeMenu.AddItem(tools, MenuCommand.DisplayInfo, _t["displayInfo.title"]);
         NativeMenu.AddItem(tools, MenuCommand.CameraTest, _t["cameraTest.title"]);
-        var keyboardLayouts = menu.AddSubmenu(_t["ui.keyboardLayout"]);
-        var layouts = InputLanguage.InstalledInputLanguages.Cast<InputLanguage>().ToArray();
-        for (var index = 0; index < layouts.Length; index++)
-        {
-            NativeMenu.AddItem(keyboardLayouts, MenuCommand.FirstKeyboardLayout + index, layouts[index].LayoutName);
-        }
         NativeMenu.AddSeparator(tools);
         NativeMenu.AddItem(tools, MenuCommand.Crosshair, _t["crosshair.toggle"]);
         NativeMenu.AddItem(tools, MenuCommand.ScreenRuler, _t["ruler.toggle"]);
         NativeMenu.AddItem(tools, MenuCommand.GameHud, _t["hud.toggle"]);
         NativeMenu.AddItem(tools, MenuCommand.TestWindow, _t["ui.testWindow"]);
         NativeMenu.AddItem(tools, MenuCommand.HardwareWindow, _t["ui.hardwareWindow"]);
+        NativeMenu.AddSeparator(tools);
+        var keyboardLayouts = menu.AddSubmenu(_t["ui.keyboardLayout"]);
+        for (var index = 0; index < KeyboardLayouts.Choices.Count; index++)
+        {
+            NativeMenu.AddItem(keyboardLayouts, MenuCommand.FirstKeyboardLayout + index, KeyboardLayouts.Choices[index].Label(_t));
+        }
 
         var settings = menu.AddSubmenu(_t["ui.menuSettings"]);
         NativeMenu.AddItem(settings, MenuCommand.Settings, _t["ui.settings"]);
@@ -918,10 +947,10 @@ internal sealed class MainForm : Form
         NativeMenu.AddItem(help, MenuCommand.About, _t["ui.about"]);
 
         menu.SetRadio(MenuCommand.FirstLanguage, LanguageChoices.Length, MenuCommand.FirstLanguage + Array.FindIndex(LanguageChoices, choice => choice.Code == _t.Language));
-        var currentKeyboard = Array.FindIndex(layouts, language => language.Handle == InputLanguage.CurrentInputLanguage.Handle);
+        var currentKeyboard = KeyboardLayouts.CurrentIndex();
         if (currentKeyboard >= 0)
         {
-            menu.SetRadio(MenuCommand.FirstKeyboardLayout, layouts.Length, MenuCommand.FirstKeyboardLayout + currentKeyboard);
+            menu.SetRadio(MenuCommand.FirstKeyboardLayout, KeyboardLayouts.Choices.Count, MenuCommand.FirstKeyboardLayout + currentKeyboard);
         }
 
         menu.Attach(Handle, _menu);
@@ -931,9 +960,9 @@ internal sealed class MainForm : Form
     private void RunMenuCommand(int id)
     {
         var keyboardIndex = id - (int)MenuCommand.FirstKeyboardLayout;
-        if (keyboardIndex >= 0 && keyboardIndex < InputLanguage.InstalledInputLanguages.Count)
+        if (keyboardIndex >= 0 && keyboardIndex < KeyboardLayouts.Choices.Count)
         {
-            ChangeKeyboardLayout(InputLanguage.InstalledInputLanguages[keyboardIndex]);
+            ChangeKeyboardLayout(KeyboardLayouts.Choices[keyboardIndex]);
             return;
         }
 
@@ -1177,8 +1206,7 @@ internal sealed class MainForm : Form
             || _cpuCard is null
             || _gpuCard is null
             || _systemCard is null
-            || _fanCard is null
-            || _chartRow is null)
+            || _fanCard is null)
         {
             return;
         }
@@ -1209,15 +1237,12 @@ internal sealed class MainForm : Form
             }
         }
 
-        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        panel.RowCount = cardRows + 1;
+        panel.RowCount = cardRows;
         for (var index = 0; index < cards.Length; index++)
         {
             panel.Controls.Add(cards[index], oneColumn ? 0 : index % 2, oneColumn ? index : index / 2);
         }
 
-        panel.Controls.Add(_chartRow, 0, cardRows);
-        panel.SetColumnSpan(_chartRow, panel.ColumnCount);
         if (!oneColumn)
         {
             panel.SetColumnSpan(_systemCard, _fanCard.Visible ? 1 : 2);
@@ -1503,6 +1528,11 @@ internal sealed class MainForm : Form
         Font = Ui.FontFor(_t.Language);
         BuildMenu();
         UpdateTrayIcon();
+        if (_contextMenu?.Items[0] is { } cleanupItem)
+        {
+            cleanupItem.Text = _t["ui.junkCleanup"];
+        }
+
         ApplyEmphasis();
         Text = $"{_t["ui.appName"]} v{CheckReport.CurrentToolVersion}";
         _copyrightLink.Text = _t["ui.copyright", DateTime.Today.Year];
@@ -1609,7 +1639,7 @@ internal sealed class MainForm : Form
     /// <summary>Installs the built-in sensor driver when it is missing. Everything else still works if this fails.</summary>
     private async Task PrepareSensorDriverAsync()
     {
-        var outcome = await Task.Run(() => PawnIoSetup.Install(HardwareInfoService.IsAdministrator(), HardwareInfoService.IsPawnIoInstalled()));
+        var outcome = await Task.Run(() => PawnIoSetup.Install(Elevation.IsAdministrator(), HardwareInfoService.IsPawnIoInstalled()));
         _isDriverOurs = outcome.Result is DriverSetupResult.Installed or DriverSetupResult.RebootRequired;
         _isDriverPackageOurs = _isDriverOurs && !outcome.HadDriverBefore;
         switch (outcome.Result)
@@ -1931,7 +1961,14 @@ internal sealed class MainForm : Form
             _activitySnapshot?.DiskBusyPercent,
             _activitySnapshot?.UploadBytesPerSecond,
             _activitySnapshot?.DownloadBytesPerSecond,
-            _activitySnapshot?.NetworkAdapter);
+            _activitySnapshot?.NetworkAdapter,
+            SensorSelector.CpuClock(_sensors),
+            SensorSelector.CpuPower(_sensors),
+            SensorSelector.GpuClock(_sensors, model),
+            SensorSelector.GpuPower(_sensors, model),
+            SensorSelector.GpuMemoryUsedBytes(_sensors, model),
+            SelectedTarget()?.DedicatedMemoryBytes,
+            _activitySnapshot?.LatencyMilliseconds);
     }
 
     private AdvancedSnapshot BuildAdvancedSnapshot() =>
@@ -2617,29 +2654,20 @@ internal sealed class MainForm : Form
         }
     }
 
-    private void ChangeKeyboardLayout(InputLanguage language)
+    private void ChangeKeyboardLayout(KeyboardLayouts.Choice choice)
     {
-        try
+        var result = KeyboardLayouts.Apply(choice);
+        if (!result.IsActivated)
         {
-            var handle = language.Handle;
-            var systemChanged = SystemParametersInfo(SPI_SETDEFAULTINPUTLANG, 0, ref handle, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
-            InputLanguage.CurrentInputLanguage = language;
-            SetStatus(systemChanged
-                ? _t["ui.keyboardLayoutChanged", language.LayoutName]
-                : _t["ui.keyboardLayoutCurrent", language.LayoutName]);
+            SetStatus(_t["ui.keyboardLayoutFailed", choice.Label(_t)], isAlert: true);
+            return;
         }
-        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
-        {
-            SetStatus(_t["ui.keyboardLayoutFailed", exception.Message], isAlert: true);
-        }
+
+        SetStatus(result.IsSystemDefault
+            ? _t["ui.keyboardLayoutChanged", choice.Label(_t)]
+            : _t["ui.keyboardLayoutCurrent", choice.Label(_t)]);
+        UpdateCommandStates();
     }
-
-    private const uint SPI_SETDEFAULTINPUTLANG = 0x005A;
-    private const uint SPIF_UPDATEINIFILE = 0x0001;
-    private const uint SPIF_SENDCHANGE = 0x0002;
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool SystemParametersInfo(uint action, uint parameter, ref IntPtr value, uint flags);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern uint RegisterWindowMessageW(string message);

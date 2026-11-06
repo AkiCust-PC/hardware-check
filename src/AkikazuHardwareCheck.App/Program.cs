@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
-using System.Security.Principal;
 using AkikazuHardwareCheck.Core.Hardware;
 using AkikazuHardwareCheck.Core.Localization;
 
@@ -27,13 +26,16 @@ internal static class Program
             return;
         }
 
+        StartupTrace.Record("main");
+
         // CPU temperatures need administrator rights, so the tool asks for them right away and staff answer one Windows prompt.
         // Declining is not an error: this copy then keeps running with what ordinary rights can read.
-        if (!args.Contains(NO_ELEVATE_ARGUMENT) && !IsAdministrator() && Environment.ProcessPath is { } path)
+        if (!args.Contains(NO_ELEVATE_ARGUMENT) && !Elevation.IsAdministrator() && Environment.ProcessPath is { } path)
         {
             try
             {
                 Process.Start(new ProcessStartInfo(path, ElevationArguments(args)) { UseShellExecute = true, Verb = "runas" })?.Dispose();
+                StartupTrace.Record("elevated");
                 return;
             }
             catch (Win32Exception)
@@ -44,6 +46,7 @@ internal static class Program
 
         ApplicationConfiguration.Initialize();
         InstallCrashGuard();
+        StartupTrace.Record("guard-ready");
 
         // Only one main window is allowed. A second launch asks the existing instance to show itself,
         // then exits without creating another window.
@@ -51,14 +54,19 @@ internal static class Program
         if (!createdNew)
         {
             SingleInstanceListener.NotifyExisting();
+            StartupTrace.Record("second-instance");
             return;
         }
+
+        StartupTrace.Record("instance-acquired");
 
         // Lets standard controls and the title bar follow the Windows light or dark setting.
         Application.SetColorMode(SystemColorMode.System);
         try
         {
+            StartupTrace.Record("main-form-start");
             var main = new MainForm(args.Contains("--tray", StringComparer.OrdinalIgnoreCase));
+            StartupTrace.Record("main-form-created");
             using var restore = SingleInstanceListener.CreateRestoreEvent();
             var restoreThread = new Thread(() =>
             {
@@ -86,10 +94,13 @@ internal static class Program
                 Name = "Single-instance restore listener",
             };
             restoreThread.Start();
+            StartupTrace.Record("message-loop");
             Application.Run(main);
+            StartupTrace.Record("exit");
         }
         catch (Exception exception)
         {
+            StartupTrace.Record("crash");
             ExitSilently(exception);
         }
     }
@@ -121,7 +132,7 @@ internal static class Program
             Directory.CreateDirectory(folder);
             File.AppendAllText(
                 Path.Combine(folder, "error.log"),
-                $"{DateTimeOffset.Now:O}{Environment.NewLine}{exception}{Environment.NewLine}{Environment.NewLine}",
+                $"{DateTimeOffset.Now:O} stage={StartupTrace.LastStage ?? "none"}{Environment.NewLine}{exception}{Environment.NewLine}{Environment.NewLine}",
                 new System.Text.UTF8Encoding(false));
         }
         catch
@@ -160,12 +171,6 @@ internal static class Program
         {
             // Already gone.
         }
-    }
-
-    private static bool IsAdministrator()
-    {
-        using var identity = WindowsIdentity.GetCurrent();
-        return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
     }
 
     /// <summary>

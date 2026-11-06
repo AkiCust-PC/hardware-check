@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using AkikazuHardwareCheck.Core.Models;
 
 namespace AkikazuHardwareCheck.Core.Monitoring;
@@ -35,7 +36,12 @@ public sealed class SensorSampler(ISensorSource source, MonitoringSession sessio
     public void Dispose()
     {
         Stop();
-        _stop.Dispose();
+        // A sensor read can outlive the join timeout. Freeing the event under that thread would turn shutdown into an
+        // ObjectDisposedException on a background thread, so the event is left to the process in that rare case.
+        if (_thread is not { IsAlive: true })
+        {
+            _stop.Dispose();
+        }
     }
 
     private void Loop()
@@ -55,15 +61,26 @@ public sealed class SensorSampler(ISensorSource source, MonitoringSession sessio
     private void ReadOnce()
     {
         // A failed read is a measurement gap, which statistics report; it must never end the session.
+        IReadOnlyList<SensorReading> readings;
         try
         {
-            var readings = source.Read();
+            readings = source.Read();
             session.Record(readings);
-            Sampled?.Invoke(readings);
         }
         catch (Exception exception)
         {
             session.RecordFailure(exception.Message);
+            return;
+        }
+
+        // A subscriber bug is not a sensor failure; counting it as one would hide the real defect in the report.
+        try
+        {
+            Sampled?.Invoke(readings);
+        }
+        catch (Exception exception)
+        {
+            Trace.TraceWarning(exception.Message);
         }
     }
 }

@@ -28,12 +28,21 @@ internal sealed class SettingsForm : Form
     private readonly CheckBox _startWithWindows = Option();
     private readonly CheckBox _alwaysOnTop = Option();
     private readonly CheckBox _crosshairEnabled = Option();
+    private readonly ComboBox _crosshairShape = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 180, Margin = new Padding(0, 0, 0, Ui.SPACING) };
+    private readonly Button _crosshairColorButton = new() { AutoSize = true, Margin = new Padding(0, 0, 0, Ui.SPACING) };
+    private readonly NumericUpDown _crosshairLength = Number(1, 200);
+    private readonly NumericUpDown _crosshairThickness = Number(1, 20);
+    private readonly NumericUpDown _crosshairGap = Number(0, 100);
+    private readonly TrackBar _crosshairOpacity = new() { Minimum = 10, Maximum = 100, TickFrequency = 10, Width = 180, Margin = new Padding(0) };
+    private readonly Label _crosshairOpacityValue = new() { AutoSize = true, Margin = new Padding(Ui.SPACING / 2, 0, 0, 0) };
+    private readonly Panel _crosshairPreview = new() { Width = 220, Height = 120, BackColor = SystemColors.Window, BorderStyle = BorderStyle.FixedSingle, Margin = new Padding(0, Ui.SPACING, 0, 0) };
     private readonly NumericUpDown _hudFont = new() { Minimum = 8, Maximum = 32, Margin = new Padding(0, 0, 0, Ui.SPACING) };
     private readonly CheckedListBox _hudItems = new() { CheckOnClick = true, IntegralHeight = false, Height = 100, Margin = new Padding(0) };
     private readonly NumericUpDown _rulerOpacity = new() { Minimum = 10, Maximum = 100, Margin = new Padding(0, 0, 0, Ui.SPACING) };
     private readonly NumericUpDown _rulerSpacing = new() { Minimum = 20, Maximum = 200, Increment = 10, Margin = new Padding(0, 0, 0, Ui.SPACING) };
     private Color _hudColor;
     private Color _rulerColor;
+    private Color _crosshairColor;
     private readonly Translator _t;
     private CrosshairSettings _crosshair;
 
@@ -64,13 +73,23 @@ internal sealed class SettingsForm : Form
         _startWithWindows.Checked = settings.StartWithWindows || StartupRegistration.IsEnabled();
         _alwaysOnTop.Checked = settings.IsAlwaysOnTop;
         _crosshairEnabled.Checked = settings.CrosshairEnabled;
+        _crosshairColor = _crosshair.Color;
+        _crosshairLength.Value = _crosshair.Length;
+        _crosshairThickness.Value = _crosshair.Thickness;
+        _crosshairGap.Value = _crosshair.Gap;
+        _crosshairOpacity.Value = _crosshair.Opacity;
         _hudFont.Value = Math.Clamp(settings.HudFontSize, 8, 32);
         _hudColor = Color.FromArgb(settings.HudColorArgb);
         _rulerColor = Color.FromArgb(settings.RulerColorArgb);
         _rulerOpacity.Value = Math.Clamp(settings.RulerOpacity, 10, 100);
         _rulerSpacing.Value = Math.Clamp(settings.RulerSpacing, 20, 200);
-        _hudItems.Height = LogicalToDeviceUnits(100);
-        var hudLabels = new[] { t["hud.cpuLoad"], t["hud.cpuTemp"], t["hud.gpuLoad"], t["hud.gpuTemp"], t["hud.memory"], t["hud.resolution"], t["hud.refresh"] };
+        _hudItems.Height = LogicalToDeviceUnits(200);
+        var hudLabels = new[]
+        {
+            t["hud.cpuLoad"], t["hud.cpuTemp"], t["hud.gpuLoad"], t["hud.gpuTemp"], t["hud.memory"],
+            t["hud.resolution"], t["hud.refresh"], t["hud.cpuClock"], t["hud.cpuPower"], t["hud.gpuClock"],
+            t["hud.gpuPower"], t["hud.vram"], t["hud.disk"], t["hud.latency"],
+        };
         for (var index = 0; index < hudLabels.Length; index++)
         {
             _hudItems.Items.Add(hudLabels[index], (settings.HudItems & (1 << index)) != 0);
@@ -111,6 +130,12 @@ internal sealed class SettingsForm : Form
 
     public AppSettings? Result => DialogResult != DialogResult.OK ? null : _original with
     {
+        CrosshairShape = (int)_crosshairShape.SelectedIndex,
+        CrosshairColorArgb = _crosshairColor.ToArgb(),
+        CrosshairLength = (int)_crosshairLength.Value,
+        CrosshairThickness = (int)_crosshairThickness.Value,
+        CrosshairGap = (int)_crosshairGap.Value,
+        CrosshairOpacity = _crosshairOpacity.Value,
         ReportFolder = string.IsNullOrWhiteSpace(_folderBox.Text) ? null : _folderBox.Text.Trim(),
         GpuStressSeconds = (double)_gpuSeconds.Value,
         CpuStressSeconds = (double)_cpuSeconds.Value,
@@ -121,12 +146,6 @@ internal sealed class SettingsForm : Form
         StartWithWindows = _startWithWindows.Checked,
         IsAlwaysOnTop = _alwaysOnTop.Checked,
         CrosshairEnabled = _crosshairEnabled.Checked,
-        CrosshairShape = (int)_crosshair.Shape,
-        CrosshairColorArgb = _crosshair.Color.ToArgb(),
-        CrosshairLength = _crosshair.Length,
-        CrosshairThickness = _crosshair.Thickness,
-        CrosshairGap = _crosshair.Gap,
-        CrosshairOpacity = _crosshair.Opacity,
         HudFontSize = (int)_hudFont.Value,
         HudColorArgb = _hudColor.ToArgb(),
         HudItems = Enumerable.Range(0, _hudItems.Items.Count).Aggregate(0, (value, index) => _hudItems.GetItemChecked(index) ? value | (1 << index) : value),
@@ -174,10 +193,45 @@ internal sealed class SettingsForm : Form
         _crosshairEnabled.Text = t["crosshair.enable"];
         AddField(layout, t["crosshair.enable"], _crosshairEnabled);
 
-        var details = Ui.Button();
-        details.Text = t["crosshair.settings"];
-        details.Click += (_, _) => OpenCrosshairEditor();
-        AddField(layout, t["crosshair.shape"], details);
+        _crosshairShape.Items.AddRange([t["crosshair.dot"], t["crosshair.cross"], t["crosshair.t"], t["crosshair.circle"]]);
+        _crosshairShape.SelectedIndex = (int)_crosshair.Shape;
+        AddField(layout, t["crosshair.shape"], _crosshairShape);
+
+        _crosshairColorButton.Text = t["crosshair.color"];
+        _crosshairColorButton.BackColor = _crosshairColor;
+        _crosshairColorButton.ForeColor = Contrast(_crosshairColor);
+        _crosshairColorButton.Click += (_, _) =>
+        {
+            using var dialog = new ColorDialog { Color = _crosshairColor, FullOpen = true };
+            if (dialog.ShowDialog(this) == DialogResult.OK)
+            {
+                _crosshairColor = dialog.Color;
+                _crosshairColorButton.BackColor = _crosshairColor;
+                _crosshairColorButton.ForeColor = Contrast(_crosshairColor);
+                _crosshairPreview.Invalidate();
+            }
+        };
+        AddField(layout, t["crosshair.color"], _crosshairColorButton);
+
+        AddField(layout, t["crosshair.length"], _crosshairLength);
+        AddField(layout, t["crosshair.thickness"], _crosshairThickness);
+        AddField(layout, t["crosshair.gap"], _crosshairGap);
+
+        var opacityRow = Ui.Flow();
+        opacityRow.WrapContents = false;
+        opacityRow.Controls.AddRange([_crosshairOpacity, _crosshairOpacityValue]);
+        _crosshairOpacityValue.Text = $"{_crosshairOpacity.Value}%";
+        _crosshairOpacity.ValueChanged += (_, _) =>
+        {
+            _crosshairOpacityValue.Text = $"{_crosshairOpacity.Value}%";
+            _crosshairPreview.Invalidate();
+        };
+        AddField(layout, t["crosshair.opacity"], opacityRow);
+
+        _crosshairPreview.Paint += (_, e) => CrosshairRenderer.Draw(e.Graphics, _crosshairPreview.ClientSize, CurrentCrosshair());
+        var previewRow = layout.RowCount++;
+        layout.Controls.Add(_crosshairPreview, 0, previewRow);
+        layout.SetColumnSpan(_crosshairPreview, 2);
 
         var hint = new Label
         {
@@ -193,6 +247,17 @@ internal sealed class SettingsForm : Form
         page.Controls.Add(layout);
         return page;
     }
+
+    private CrosshairSettings CurrentCrosshair() => new(
+        (CrosshairShape)Math.Max(0, _crosshairShape.SelectedIndex),
+        _crosshairColor,
+        (int)_crosshairLength.Value,
+        (int)_crosshairThickness.Value,
+        (int)_crosshairGap.Value,
+        _crosshairOpacity.Value);
+
+    private static Color Contrast(Color color) =>
+        (color.R * 299) + (color.G * 587) + (color.B * 114) > 140000 ? Color.Black : Color.White;
 
     private TabPage BuildGamePage(Translator t)
     {
@@ -226,15 +291,6 @@ internal sealed class SettingsForm : Form
         AddField(fields, t["ruler.spacing"], _rulerSpacing);
         page.Controls.Add(fields);
         return page;
-    }
-
-    private void OpenCrosshairEditor()
-    {
-        using var form = new CrosshairSettingsForm(_t, _crosshair, Font);
-        if (form.ShowDialog(this) == DialogResult.OK && form.Result is { } result)
-        {
-            _crosshair = result;
-        }
     }
 
     private TableLayoutPanel Fields()

@@ -296,7 +296,7 @@ public static class AdvancedInfoBuilder
                 Field($"display.{index}.resolution", t["advanced.resolution"], display.WidthPixels is { } width && display.HeightPixels is { } height ? $"{width} × {height}" : null, InfoOrigin.Windows, provenance: displayConfig),
                 Field($"display.{index}.refresh", t["advanced.refreshRate"], display.RefreshRateHz is { } rate ? $"{Math.Round(rate).ToString(CultureInfo.InvariantCulture)} Hz" : null, InfoOrigin.Windows, provenance: displayConfig),
                 Field($"display.{index}.diagonal", t["advanced.diagonal"], display.DiagonalInches is { } inches ? $"{inches.ToString("0.#", CultureInfo.InvariantCulture)}" : null, InfoOrigin.Firmware, "in", provenance: monitor),
-                Field($"display.{index}.connection", t["advanced.connection"], display.Connection, InfoOrigin.Windows, provenance: displayConfig),
+                Field($"display.{index}.connection", t["advanced.connection"], DisplayNames.Connection(t, display.Connection), InfoOrigin.Windows, provenance: displayConfig),
                 Field($"display.{index}.primary", t["advanced.primary"], display.IsPrimary ? t["common.yes"] : t["common.no"], InfoOrigin.Windows, provenance: displayConfig),
                 Field($"display.{index}.gpu", t["advanced.connectedGpu"], display.ConnectedGpu, InfoOrigin.Windows, provenance: displayConfig),
                 Field($"display.{index}.hdrSupported", t["advanced.hdrSupported"], display.HdrSupported switch { true => t["common.yes"], false => t["common.no"], _ => null }, InfoOrigin.Windows, provenance: displayConfig),

@@ -317,7 +317,7 @@ public static class HardwareSummary
             display.WidthPixels is { } width && display.HeightPixels is { } height ? $"{width} × {height}" : null,
             display.RefreshRateHz is { } rate ? $"{Math.Round(rate).ToString(CultureInfo.InvariantCulture)}Hz" : null,
             display.DiagonalInches is { } inches ? t["summary.inches", inches.ToString("0.#", CultureInfo.InvariantCulture)] : null,
-            display.Connection == "Internal" ? t["display.internal"] : display.Connection,
+            DisplayNames.Connection(t, display.Connection),
         ];
         return string.Join(" ", parts.Where(part => part is not null));
     }

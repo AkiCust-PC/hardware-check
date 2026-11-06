@@ -1,4 +1,3 @@
-using System.Security.Principal;
 using AkikazuHardwareCheck.Core.Models;
 using Microsoft.Win32;
 
@@ -29,7 +28,7 @@ public static class HardwareInfoService
         var environment = new ProbeEnvironment(
             Collect<OperatingSystemInfo?>("OperatingSystem", null, OperatingSystemCollector.ReadOperatingSystem),
             Collect("Activation", WindowsActivation.Unknown, OperatingSystemCollector.ReadActivation),
-            IsAdministrator(),
+            Elevation.IsAdministrator(),
             Collect("PawnIO", false, IsPawnIoInstalled));
 
         var gpus = Collect<IReadOnlyList<GpuInfo>>("GPU", [], GpuInfoCollector.ReadGpus);
@@ -68,12 +67,6 @@ public static class HardwareInfoService
 
         var drive = new DriveInfo(root);
         return new SystemDriveSpace((ulong)(drive.TotalSize - drive.TotalFreeSpace), (ulong)drive.TotalSize);
-    }
-
-    public static bool IsAdministrator()
-    {
-        using var identity = WindowsIdentity.GetCurrent();
-        return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
     }
 
     public static bool IsPawnIoInstalled()

@@ -130,14 +130,6 @@ internal sealed class FloatingPerformanceForm : Form
                 _animationTimer.Stop();
             }
         };
-        FormClosed += (_, _) =>
-        {
-            _sampleTimer.Dispose();
-            _animationTimer.Dispose();
-            _clickTimer.Dispose();
-            _menu.Dispose();
-        };
-
         MouseDown += BeginDrag;
         MouseMove += MoveDrag;
         MouseUp += EndDrag;
@@ -149,13 +141,51 @@ internal sealed class FloatingPerformanceForm : Form
         EnableLayered();
     }
 
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            // FormClosed is not raised by Dispose, and the main window closes this form with Dispose when the
+            // language changes; leaving the timers running would leak one animation timer per switch.
+            _sampleTimer.Dispose();
+            _animationTimer.Dispose();
+            _clickTimer.Dispose();
+            _menu.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
+
     private void BuildMenu()
     {
         AddMenuItem(_t["floating.dockLeft"], () => DockTo(DockEdge.Left));
         AddMenuItem(_t["floating.dockRight"], () => DockTo(DockEdge.Right));
         AddMenuItem(_t["floating.undock"], Undock);
         _menu.Items.Add(new ToolStripSeparator());
+        AddMenuItem(_t["floating.clean"], StartCleanMemory);
+        AddMenuItem(_t["ui.junkCleanup"], ShowJunkCleanup);
+        _menu.Items.Add(new ToolStripSeparator());
         AddMenuItem(_t["floating.hide"], Hide);
+    }
+
+    private async void StartCleanMemory()
+    {
+        try
+        {
+            await CleanMemoryAsync();
+        }
+        catch (Exception exception)
+        {
+            _status = exception.Message;
+            _statusUntil = DateTimeOffset.Now.AddSeconds(4);
+            Render();
+        }
+    }
+
+    private void ShowJunkCleanup()
+    {
+        using var form = new JunkCleanupForm(_t, Font);
+        form.ShowDialog(this);
     }
 
     private void AddMenuItem(string text, Action action)
@@ -296,7 +326,7 @@ internal sealed class FloatingPerformanceForm : Form
             var rows = new List<(string Label, string Value)>();
             if (cpu is { } temperature)
             {
-                rows.Add(("CPU", $"{temperature.ToString("0", CultureInfo.InvariantCulture)}°C"));
+                rows.Add((_t["hud.label.cpu"], $"{temperature.ToString("0", CultureInfo.InvariantCulture)}°C"));
             }
 
             if (_sample?.MemoryLoad is { } memory)
@@ -320,6 +350,11 @@ internal sealed class FloatingPerformanceForm : Form
         {
             using var cleaningFont = new Font(Font.FontFamily, 7.5f, FontStyle.Regular);
             graphics.DrawString(_t["floating.cleaning"], cleaningFont, mutedBrush, new RectangleF(0, ClientSize.Height * 0.78f, ClientSize.Width, ClientSize.Height * 0.16f), centered);
+        }
+        else if (_status is { } status)
+        {
+            using var statusFont = new Font(Font.FontFamily, 7.5f, FontStyle.Regular);
+            graphics.DrawString(status, statusFont, mutedBrush, new RectangleF(0, ClientSize.Height * 0.76f, ClientSize.Width, ClientSize.Height * 0.22f), centered);
         }
     }
 

@@ -85,7 +85,7 @@ public static class MaintenanceCollectors
 
         return programs
             .Distinct()
-            .OrderBy(program => program.Name, StringComparer.CurrentCultureIgnoreCase)
+            .OrderBy(program => program.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 
@@ -113,11 +113,12 @@ public static class MaintenanceCollectors
 
         return processes
             .OrderByDescending(process => process.WorkingSetBytes)
-            .ThenBy(process => process.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(process => process.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 
-    public static string FormatBytes(long bytes) => $"{bytes / (1024d * 1024):0.#} MB";
+    public static string FormatBytes(long bytes) =>
+        (bytes / (1024d * 1024)).ToString("0.#", CultureInfo.InvariantCulture) + " MB";
 
     public static string FormatInstallDate(string? value)
     {

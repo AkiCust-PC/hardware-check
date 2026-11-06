@@ -72,13 +72,23 @@ internal sealed class PeripheralTestForm : Form
         KeyDown += OnKeyDown;
         _gamepadTimer.Tick += (_, _) => PollGamepad();
         Shown += (_, _) => _gamepadTimer.Start();
-        FormClosed += (_, _) => _gamepadTimer.Stop();
         Ui.ScaleButtons(this);
         BuildKeyList();
         UpdateAudioLabels();
     }
 
     public AudioCheckResult AudioResult => _audio;
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _gamepadTimer.Stop();
+            _gamepadTimer.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
 
     private TabPage BuildAudioPage()
     {
@@ -303,7 +313,7 @@ internal sealed class PeripheralTestForm : Form
         keys.AddRange([Keys.CapsLock, Keys.PrintScreen, Keys.Scroll, Keys.Pause, Keys.LWin, Keys.RWin, Keys.Apps, Keys.Sleep]);
         foreach (var key in keys.Distinct())
         {
-            _keys.Items.Add(key);
+            _keys.Items.Add(new KeyItem(key, KeyLabel(key)));
         }
 
         _keyCount.Text = _t["peripheralTest.keysTested", 0];
@@ -320,11 +330,72 @@ internal sealed class PeripheralTestForm : Form
         MarkKey(e.KeyCode);
     }
 
+    private static string KeyLabel(Keys key) => key switch
+    {
+        >= Keys.A and <= Keys.Z => key.ToString(),
+        >= Keys.D0 and <= Keys.D9 => ((char)('0' + (key - Keys.D0))).ToString(),
+        >= Keys.F1 and <= Keys.F12 => key.ToString(),
+        >= Keys.NumPad0 and <= Keys.NumPad9 => "Num " + (key - Keys.NumPad0).ToString(CultureInfo.InvariantCulture),
+        Keys.Up => "↑",
+        Keys.Down => "↓",
+        Keys.Left => "←",
+        Keys.Right => "→",
+        Keys.Space => "Space",
+        Keys.Enter => "Enter",
+        Keys.Back => "Backspace",
+        Keys.Tab => "Tab",
+        Keys.Escape => "Esc",
+        Keys.Insert => "Ins",
+        Keys.Delete => "Del",
+        Keys.Home => "Home",
+        Keys.End => "End",
+        Keys.PageUp => "PgUp",
+        Keys.PageDown => "PgDn",
+        Keys.LShiftKey => "L Shift",
+        Keys.RShiftKey => "R Shift",
+        Keys.LControlKey => "L Ctrl",
+        Keys.RControlKey => "R Ctrl",
+        Keys.LMenu => "L Alt",
+        Keys.RMenu => "R Alt",
+        Keys.LWin => "L Win",
+        Keys.RWin => "R Win",
+        Keys.OemSemicolon => ";",
+        Keys.OemQuestion => "/",
+        Keys.Oemtilde => "`",
+        Keys.OemOpenBrackets => "[",
+        Keys.OemPipe => "\\",
+        Keys.OemCloseBrackets => "]",
+        Keys.OemQuotes => "'",
+        Keys.OemBackslash => "\\",
+        Keys.Oemcomma => ",",
+        Keys.OemPeriod => ".",
+        Keys.OemMinus => "-",
+        Keys.Oemplus => "=",
+        Keys.Add => "Num +",
+        Keys.Subtract => "Num -",
+        Keys.Multiply => "Num *",
+        Keys.Divide => "Num /",
+        Keys.Decimal => "Num .",
+        Keys.NumLock => "NumLock",
+        Keys.CapsLock => "CapsLock",
+        Keys.PrintScreen => "PrtSc",
+        Keys.Scroll => "ScrollLock",
+        Keys.Pause => "Pause",
+        Keys.Apps => "Menu",
+        Keys.Sleep => "Sleep",
+        _ => key.ToString(),
+    };
+
+    private sealed record KeyItem(Keys Key, string Label)
+    {
+        public override string ToString() => Label;
+    }
+
     private void MarkKey(Keys key)
     {
         for (var index = 0; index < _keys.Items.Count; index++)
         {
-            if (_keys.Items[index] is Keys candidate && candidate == key)
+            if (_keys.Items[index] is KeyItem candidate && candidate.Key == key)
             {
                 _keys.SetItemChecked(index, true);
                 break;

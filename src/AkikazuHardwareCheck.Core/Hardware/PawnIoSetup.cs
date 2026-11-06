@@ -169,7 +169,15 @@ public static class PawnIoSetup
 
             Directory.CreateDirectory(folder);
             var path = Path.Combine(folder, "PawnIO_setup.exe");
-            File.WriteAllBytes(path, copy.ToArray());
+            var payload = copy.ToArray();
+            File.WriteAllBytes(path, payload);
+            // Verify the file that is actually about to run, not only the in-memory copy: the temp path is writable
+            // by the same user between the write and this point.
+            if (!MatchesPinnedInstaller(File.ReadAllBytes(path)))
+            {
+                return null;
+            }
+
             using var process = Process.Start(new ProcessStartInfo(path, arguments) { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = folder });
             if (process is null)
             {

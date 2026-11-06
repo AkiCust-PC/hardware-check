@@ -1,5 +1,5 @@
 using System.Runtime.InteropServices;
-using System.Security.Principal;
+using AkikazuHardwareCheck.Core.Hardware;
 
 namespace AkikazuHardwareCheck.Core.Diagnostics;
 
@@ -43,7 +43,7 @@ public static class JunkCleaner
             entries.Add(new JunkEntry(JunkCategory.RecycleBin, recycleBytes, (int)Math.Min(recycleItems, int.MaxValue), RequiresAdministrator: false));
         }
 
-        return new JunkScan(entries, IsAdministrator());
+        return new JunkScan(entries, Elevation.IsAdministrator());
     }
 
     public static JunkCleanResult Clean(JunkCategory category)
@@ -69,6 +69,7 @@ public static class JunkCleaner
         var files = 0;
         var bytes = 0L;
         var skipped = 0;
+        var completed = true;
         try
         {
             foreach (var entry in Directory.EnumerateFileSystemEntries(path))
@@ -102,12 +103,13 @@ public static class JunkCleaner
                 }
             }
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
-            // The directory itself may be protected; keep the partial result.
+            // The directory itself may be protected; the caller still gets the partial counts, but not "completed".
+            completed = false;
         }
 
-        return new JunkCleanResult(files, bytes, skipped, true);
+        return new JunkCleanResult(files, bytes, skipped, completed);
     }
 
     private static JunkEntry Measure(JunkCategory category, string? path, bool requiresAdministrator)
@@ -121,7 +123,7 @@ public static class JunkCleaner
         var files = 0;
         try
         {
-            foreach (var file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+            foreach (var file in AllFiles(path))
             {
                 if (category == JunkCategory.ThumbnailCache && !Path.GetFileName(file).StartsWith("thumbcache_", StringComparison.OrdinalIgnoreCase))
                 {
@@ -147,11 +149,17 @@ public static class JunkCleaner
         return new JunkEntry(category, bytes, files, requiresAdministrator);
     }
 
+    /// <summary>Junctions and symlinks in a temp folder must not make the scan follow another volume or loop.</summary>
+    private static IEnumerable<string> AllFiles(string path) => Directory.EnumerateFiles(
+        path,
+        "*",
+        new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint });
+
     private static long DirectorySize(string path)
     {
         try
         {
-            return Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories).Sum(file =>
+            return AllFiles(path).Sum(file =>
             {
                 try
                 {
@@ -173,7 +181,7 @@ public static class JunkCleaner
     {
         try
         {
-            return Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories).Count();
+            return AllFiles(path).Count();
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -197,12 +205,6 @@ public static class JunkCleaner
         bytes = result == 0 ? info.SizeBytes : 0;
         items = result == 0 ? info.ItemCount : 0;
         return result == 0;
-    }
-
-    private static bool IsAdministrator()
-    {
-        using var identity = WindowsIdentity.GetCurrent();
-        return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
     }
 
     [StructLayout(LayoutKind.Sequential)]

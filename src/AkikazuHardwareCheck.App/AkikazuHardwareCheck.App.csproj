@@ -22,6 +22,9 @@
   <ItemGroup>
     <ProjectReference Include="..\AkikazuHardwareCheck.Core\AkikazuHardwareCheck.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="AkikazuHardwareCheck.App.SmokeTests" />
+  </ItemGroup>
   <!-- Debugger and crash-dump parts of the runtime, the WinForms designer, and a Linux-only helper of a dependency.
        A running copy of this program loads none of them. Only the published package changes, not debug builds. -->
   <Target Name="RemoveUnusedRuntimeFiles" AfterTargets="ComputeResolvedFilesToPublishList">

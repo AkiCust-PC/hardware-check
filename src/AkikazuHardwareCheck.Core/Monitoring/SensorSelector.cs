@@ -75,6 +75,22 @@ public static class SensorSelector
     public static double? GpuClock(IEnumerable<SensorReading> readings, string? gpuModel) =>
         GpuReadings(readings, gpuModel, "Clock").Where(reading => reading.SensorName == "GPU Core" && reading.Value > 0).Max(reading => reading.Value);
 
+    /// <summary>Package power when the board or card exposes it; a missing sensor stays missing instead of reading 0.</summary>
+    public static double? CpuPower(IEnumerable<SensorReading> readings) => readings
+        .Where(reading => IsCpu(reading.HardwareType) && IsValidType(reading, "Power") && reading.Value > 0)
+        .Max(reading => reading.Value);
+
+    public static double? GpuPower(IEnumerable<SensorReading> readings, string? gpuModel) =>
+        GpuReadings(readings, gpuModel, "Power").Where(reading => reading.Value > 0).Max(reading => reading.Value);
+
+    /// <summary>LibreHardwareMonitor reports dedicated memory in MB or GB; the live snapshot uses bytes.</summary>
+    public static double? GpuMemoryUsedBytes(IEnumerable<SensorReading> readings, string? gpuModel) =>
+        GpuReadings(readings, gpuModel, "SmallData")
+            .Concat(GpuReadings(readings, gpuModel, "Data"))
+            .Where(reading => reading.SensorName.Contains("Memory Used", StringComparison.OrdinalIgnoreCase))
+            .Select(ToBytes)
+            .Max();
+
     /// <summary>
     /// Fan speeds under the names desktop boards and laptop controllers use. A header with nothing attached reads 0 and is left
     /// out; a graphics card fan is kept at 0, because many cards stop their fans when cool.
@@ -130,6 +146,13 @@ public static class SensorSelector
         var available = readings.Select(reading => reading.SensorName).ToHashSet();
         return names.FirstOrDefault(available.Contains);
     }
+
+    private static double? ToBytes(SensorReading reading) => reading.Value is not { } value ? null : reading.Unit switch
+    {
+        "GB" => value * 1024 * 1024 * 1024,
+        "MB" => value * 1024 * 1024,
+        _ => value,
+    };
 
     private static string Normalize(string name) =>
         name.Replace("(R)", "", StringComparison.OrdinalIgnoreCase).Replace("(TM)", "", StringComparison.OrdinalIgnoreCase).Replace(" ", "", StringComparison.Ordinal);

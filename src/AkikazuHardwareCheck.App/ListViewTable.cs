@@ -54,6 +54,7 @@ internal static class ListViewTable
     {
         var hiddenWidths = new Dictionary<ColumnHeader, int>();
         var menu = new ContextMenuStrip();
+        list.Disposed += (_, _) => menu.Dispose();
         list.MouseUp += (_, e) =>
         {
             if (e.Button != MouseButtons.Right)
@@ -120,6 +121,7 @@ internal static class ListViewTable
         copy.Click += (_, _) => Copy(list, t);
         menu.Items.Add(copy);
         list.ContextMenuStrip = menu;
+        list.Disposed += (_, _) => menu.Dispose();
         list.KeyDown += (_, e) =>
         {
             if (e.Control && e.KeyCode == Keys.C)

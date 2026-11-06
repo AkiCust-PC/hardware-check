@@ -17,7 +17,7 @@
 - [ ] SATA 硬盘和 USB 硬盘盒的健康读取
 - [ ] 接上扬声器和麦克风后的识别，扬声器测试和麦克风回放实际听一次
 - [ ] 带 UAC 提示的电脑：点“是”、点“否”两种路径；未装 PawnIO 时自动安装，退出后自动卸载
-- [ ] 查清并关闭验证记录中的启动崩溃（0xC0000409）
+- [ ] 查清并关闭验证记录中的启动崩溃（0xC0000409）；现已在 `%LOCALAPPDATA%\AkikazuHardwareCheck\startup.log` 记录启动阶段，复现后看最后一行
 - [ ] USB 水冷的品牌显示；Wi-Fi 信号；无 TPM 或传统 BIOS 的电脑
 - [ ] 真实双显卡（不同型号、同型号）的目标选择和传感器对应
 - [ ] 未安装 .NET 的干净 Windows 10 和 Windows 11
@@ -37,8 +37,9 @@
 ## 发布
 
 - [ ] 确认 `Directory.Build.props` 的版本号
-- [ ] 运行 `scripts/publish.ps1`，确认体积没有异常增长（v0.1.2：程序 55.6 MB，压缩包 49.4 MB）
-- [ ] 创建独立仓库，在 GitHub Release 上传 `AkikazuHardwareCheck-win-x64.zip`（需要单独授权）
+- [ ] 确认 GitHub Actions 的构建、单元测试和窗口冒烟测试全绿
+- [ ] 运行 `scripts/publish.ps1`，确认体积没有异常增长（v0.1.2 实测：程序 55.6 MB，压缩包 49.4 MB；v0.2.0 待重新测量）
+- [ ] 在仓库 `AkiCust-PC/hardware-check` 的 GitHub Release 上传 `AkikazuHardwareCheck-win-x64.zip`（需要单独授权）
 - [ ] 在网站仓库的 `app/data/tools/hardware-check-release.json` 填入 `url`、`sha256`、`version`。`url` 为 `https://github.com/<owner>/<repo>/releases/latest/download/AkikazuHardwareCheck-win-x64.zip`，`sha256` 取 zip 的值。`url` 为空时网站下载按钮保持禁用
 - [ ] 每次发新版都同步上述 `sha256` 和 `version`：`latest` 链接会自动指向新版，网页上的版本和校验值不会
 - [ ] 尽可能完成代码签名，并在签名后重新计算 SHA-256

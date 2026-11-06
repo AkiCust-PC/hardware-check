@@ -11,4 +11,11 @@ public sealed record LiveSnapshot(
     double? DiskBusy,
     double? UploadBytesPerSecond,
     double? DownloadBytesPerSecond,
-    string? NetworkAdapter);
+    string? NetworkAdapter,
+    double? CpuClockMhz = null,
+    double? CpuPowerWatts = null,
+    double? GpuClockMhz = null,
+    double? GpuPowerWatts = null,
+    double? GpuMemoryUsedBytes = null,
+    double? GpuMemoryTotalBytes = null,
+    double? LatencyMilliseconds = null);

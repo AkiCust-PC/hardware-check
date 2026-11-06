@@ -127,6 +127,12 @@ public static class DiskHealthCollector
     /// <summary>CrystalDiskInfo's default: any raw value of 1 or more on 05, C5 or C6 is a caution.</summary>
     public static (DiskHealthStatus Status, List<DiskFinding> Findings) JudgeAta(ulong? reallocated, ulong? pending, ulong? uncorrectable, int? lifePercent, bool toolSaysBad)
     {
+        // No attribute and no life value means SMART was not actually read. "Good" would claim a check that never ran.
+        if (reallocated is null && pending is null && uncorrectable is null && lifePercent is null && !toolSaysBad)
+        {
+            return (DiskHealthStatus.Unknown, [DiskFinding.NotReadable]);
+        }
+
         var findings = new List<DiskFinding>();
         if (toolSaysBad)
         {
