@@ -11,7 +11,7 @@ public sealed record MemoryCleanupResult(int Attempted, int Succeeded, int Skipp
 /// </summary>
 public static class MemoryOptimizer
 {
-    private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+    private const uint PROCESS_QUERY_INFORMATION = 0x0400;
     private const uint PROCESS_SET_QUOTA = 0x0100;
     private const long MINIMUM_WORKING_SET_BYTES = 16L * 1024 * 1024;
 
@@ -40,7 +40,7 @@ public static class MemoryOptimizer
                 }
 
                 attempted++;
-                var handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SET_QUOTA, false, process.Id);
+                var handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_SET_QUOTA, false, process.Id);
                 if (handle == IntPtr.Zero)
                 {
                     continue;
