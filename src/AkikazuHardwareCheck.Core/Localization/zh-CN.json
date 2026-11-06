@@ -338,6 +338,8 @@
   "tray.exit": "退出",
   "tray.hint": "程序仍在后台运行，双击图标可以恢复窗口。",
   "floating.title": "性能",
+  "floating.ballLabel": "CPU / GPU",
+  "floating.clickHint": "点击清理内存",
   "floating.cpuTemperature": "处理器温度",
   "floating.gpuTemperature": "显卡温度",
   "floating.cpuLoad": "处理器占用",

@@ -1,3 +1,4 @@
+using System.Drawing.Drawing2D;
 using System.Globalization;
 using AkikazuHardwareCheck.Core.Diagnostics;
 using AkikazuHardwareCheck.Core.Localization;
@@ -6,32 +7,29 @@ using AkikazuHardwareCheck.Core.Monitoring;
 namespace AkikazuHardwareCheck.App;
 
 /// <summary>
-/// A small borderless monitor that can sit against a screen edge or expand when dragged away. It reads the existing
-/// live snapshot and never opens a second sensor source.
+/// A borderless performance window. Near a screen edge it is a small vertical strip; away from the edge it becomes a
+/// semi-transparent circular ball showing only the CPU/GPU temperatures. A click on the surface trims other processes.
 /// </summary>
 internal sealed class FloatingPerformanceForm : Form
 {
-    private const int EDGE_WIDTH = 220;
-    private const int EXPANDED_WIDTH = 380;
+    private const int BALL_SIZE = 132;
+    private const int STRIP_WIDTH = 220;
+    private const int STRIP_HEIGHT = 320;
     private const int SNAP_DISTANCE = 28;
-    private const int INITIAL_HEIGHT = 320;
+    private const int DRAG_THRESHOLD = 4;
 
     private readonly Translator _t;
     private readonly Func<LiveSnapshot> _readSnapshot;
-    private readonly Label _cpuTemperature = ValueLabel();
-    private readonly Label _gpuTemperature = ValueLabel();
-    private readonly Label _cpuLoad = ValueLabel();
-    private readonly Label _gpuLoad = ValueLabel();
-    private readonly Label _memory = ValueLabel();
-    private readonly Label _result = Ui.Label();
-    private readonly Button _clean = Ui.Button();
-    private readonly Button _close = new() { Text = "×", AutoSize = false, Size = new Size(28, 28), FlatStyle = FlatStyle.System };
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 1000 };
     private Point _dragCursor;
     private Point _dragStart;
     private bool _dragging;
-    private bool _snapped;
+    private bool _dragMoved;
+    private bool _snapped = true;
     private bool _cleaning;
+    private LiveSnapshot? _sample;
+    private string? _status;
+    private DateTimeOffset _statusUntil;
 
     public FloatingPerformanceForm(Translator t, Func<LiveSnapshot> readSnapshot, Font font)
     {
@@ -44,77 +42,162 @@ internal sealed class FloatingPerformanceForm : Form
         ShowInTaskbar = false;
         TopMost = true;
         StartPosition = FormStartPosition.Manual;
-        BackColor = SystemColors.Window;
-        ClientSize = new Size(EDGE_WIDTH, INITIAL_HEIGHT);
-        MinimumSize = new Size(EDGE_WIDTH, 260);
+        BackColor = Color.FromArgb(18, 23, 30);
+        DoubleBuffered = true;
+        ClientSize = new Size(BALL_SIZE, BALL_SIZE);
+        SetStyle(ControlStyles.SupportsTransparentBackColor, true);
 
-        _clean.Text = t["floating.clean"];
-        _clean.MinimumSize = new Size(0, Ui.BUTTON_MIN_HEIGHT);
-        _clean.Click += async (_, _) => await CleanMemoryAsync();
-        _close.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        _close.Click += (_, _) => Hide();
-
-        var title = new Label
-        {
-            Text = t["floating.title"],
-            AutoSize = true,
-            Font = new Font(Font, FontStyle.Bold),
-            Margin = new Padding(0, 0, 0, Ui.SPACING),
-        };
-        var top = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 2, AutoSize = true, Margin = new Padding(0) };
-        top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        top.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        top.Controls.Add(title, 0, 0);
-        top.Controls.Add(_close, 1, 0);
-
-        var body = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 8, AutoSize = true, Margin = new Padding(0) };
-        body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        AddMetric(body, t["floating.cpuTemperature"], _cpuTemperature, 0, 0);
-        AddMetric(body, t["floating.gpuTemperature"], _gpuTemperature, 1, 0);
-        AddMetric(body, t["floating.cpuLoad"], _cpuLoad, 0, 2);
-        AddMetric(body, t["floating.gpuLoad"], _gpuLoad, 1, 2);
-        AddMetric(body, t["floating.memory"], _memory, 0, 4);
-        body.Controls.Add(_clean, 0, 6);
-        body.SetColumnSpan(_clean, 2);
-        body.Controls.Add(_result, 0, 7);
-        body.SetColumnSpan(_result, 2);
-
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Padding = new Padding(Ui.SPACING), Margin = new Padding(0) };
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.Controls.Add(top, 0, 0);
-        root.Controls.Add(body, 0, 1);
-        AttachDrag(root);
-        Controls.Add(root);
-
-        _timer.Tick += (_, _) => RefreshValues();
+        _timer.Tick += (_, _) => RefreshSample();
         Shown += (_, _) =>
         {
-            Width = DpiScale(_snapped ? EDGE_WIDTH : EXPANDED_WIDTH);
-            Height = DpiScale(INITIAL_HEIGHT);
-            SnapToNearestEdge();
-            RefreshValues();
+            ApplyMode();
+            SnapToNearestEdge(force: true);
+            RefreshSample();
             _timer.Start();
         };
         FormClosed += (_, _) => _timer.Dispose();
-        Resize += (_, _) => ApplyWidth();
+        MouseDown += BeginDrag;
+        MouseMove += MoveDrag;
+        MouseUp += EndDrag;
     }
 
-    private void AttachDrag(Control control)
+    protected override void OnPaint(PaintEventArgs e)
     {
-        if (control is not Button)
+        base.OnPaint(e);
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+        if (_snapped)
         {
-            control.MouseDown += BeginDrag;
-            control.MouseMove += MoveDrag;
-            control.MouseUp += EndDrag;
-            control.DoubleClick += ToggleSnap;
+            DrawStrip(e.Graphics);
+        }
+        else
+        {
+            DrawBall(e.Graphics);
+        }
+    }
+
+    private void RefreshSample()
+    {
+        _sample = _readSnapshot();
+        if (_status is not null && DateTimeOffset.Now >= _statusUntil)
+        {
+            _status = null;
         }
 
-        foreach (Control child in control.Controls)
+        Invalidate();
+    }
+
+    private void ApplyMode()
+    {
+        var size = _snapped
+            ? new Size(DpiScale(STRIP_WIDTH), DpiScale(STRIP_HEIGHT))
+            : new Size(DpiScale(BALL_SIZE), DpiScale(BALL_SIZE));
+        ClientSize = size;
+        Opacity = _snapped ? 0.94 : 0.86;
+        if (_snapped)
         {
-            AttachDrag(child);
+            Region?.Dispose();
+            Region = null;
         }
+        else
+        {
+            SetEllipseRegion(size);
+        }
+
+        Invalidate();
+    }
+
+    private void SetEllipseRegion(Size size)
+    {
+        using var path = new GraphicsPath();
+        path.AddEllipse(0, 0, Math.Max(1, size.Width - 1), Math.Max(1, size.Height - 1));
+        var previous = Region;
+        Region = new Region(path);
+        previous?.Dispose();
+    }
+
+    private void DrawBall(Graphics graphics)
+    {
+        var bounds = new Rectangle(1, 1, Math.Max(1, ClientSize.Width - 3), Math.Max(1, ClientSize.Height - 3));
+        using var path = new GraphicsPath();
+        path.AddEllipse(bounds);
+        using var fill = new LinearGradientBrush(bounds, Color.FromArgb(235, 43, 55, 72), Color.FromArgb(240, 16, 22, 31), 45f);
+        graphics.FillPath(fill, path);
+        using var border = new Pen(Color.FromArgb(110, 255, 255, 255), 1f);
+        graphics.DrawPath(border, path);
+
+        using var labelFont = new Font(Font.FontFamily, 8.5f, FontStyle.Regular);
+        using var valueFont = new Font(Font.FontFamily, 17f, FontStyle.Bold);
+        using var white = new SolidBrush(Color.White);
+        using var muted = new SolidBrush(Color.FromArgb(190, 220, 228, 238));
+        using var centered = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+
+        var labelRect = new RectangleF(0, ClientSize.Height * 0.24f, ClientSize.Width, ClientSize.Height * 0.2f);
+        graphics.DrawString(_t["floating.ballLabel"], labelFont, muted, labelRect, centered);
+
+        var temperature = TemperaturePair(_sample?.CpuTemperature, _sample?.GpuTemperature);
+        var valueRect = new RectangleF(0, ClientSize.Height * 0.42f, ClientSize.Width, ClientSize.Height * 0.32f);
+        graphics.DrawString(temperature, valueFont, white, valueRect, centered);
+
+        if (_cleaning)
+        {
+            using var small = new Font(Font.FontFamily, 8f, FontStyle.Regular);
+            graphics.DrawString(_t["floating.cleaning"], small, muted, new RectangleF(0, ClientSize.Height * 0.72f, ClientSize.Width, ClientSize.Height * 0.18f), centered);
+        }
+    }
+
+    private void DrawStrip(Graphics graphics)
+    {
+        var bounds = new Rectangle(1, 1, Math.Max(1, ClientSize.Width - 3), Math.Max(1, ClientSize.Height - 3));
+        using var path = RoundedRect(bounds, DpiScale(12));
+        using var fill = new LinearGradientBrush(bounds, Color.FromArgb(238, 36, 44, 58), Color.FromArgb(240, 15, 20, 28), 90f);
+        graphics.FillPath(fill, path);
+        using var border = new Pen(Color.FromArgb(95, 255, 255, 255), 1f);
+        graphics.DrawPath(border, path);
+
+        using var titleFont = new Font(Font.FontFamily, 9f, FontStyle.Bold);
+        using var labelFont = new Font(Font.FontFamily, 8f, FontStyle.Regular);
+        using var valueFont = new Font(Font.FontFamily, 13f, FontStyle.Bold);
+        using var white = new SolidBrush(Color.White);
+        using var muted = new SolidBrush(Color.FromArgb(190, 220, 228, 238));
+        using var left = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center };
+        using var right = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center };
+
+        var padding = DpiScale(14);
+        graphics.DrawString(_t["floating.title"], titleFont, white, new RectangleF(padding, DpiScale(12), ClientSize.Width - (padding * 2), DpiScale(20)));
+        var y = DpiScale(49);
+        DrawRow(graphics, _t["floating.cpuTemperature"], Temperature(_sample?.CpuTemperature), labelFont, valueFont, white, muted, left, right, padding, ref y);
+        DrawRow(graphics, _t["floating.gpuTemperature"], Temperature(_sample?.GpuTemperature), labelFont, valueFont, white, muted, left, right, padding, ref y);
+        DrawRow(graphics, _t["floating.cpuLoad"], Percent(_sample?.CpuLoad), labelFont, valueFont, white, muted, left, right, padding, ref y);
+        DrawRow(graphics, _t["floating.gpuLoad"], Percent(_sample?.GpuLoad), labelFont, valueFont, white, muted, left, right, padding, ref y);
+        DrawRow(graphics, _t["floating.memory"], Percent(_sample?.MemoryLoad), labelFont, valueFont, white, muted, left, right, padding, ref y);
+
+        using var hintFont = new Font(Font.FontFamily, 8f, FontStyle.Regular);
+        graphics.DrawString(_t["floating.clickHint"], hintFont, muted, new RectangleF(padding, ClientSize.Height - DpiScale(34), ClientSize.Width - (padding * 2), DpiScale(22)), new StringFormat { Alignment = StringAlignment.Center });
+        if (_status is not null)
+        {
+            graphics.DrawString(_status, hintFont, white, new RectangleF(padding, ClientSize.Height - DpiScale(56), ClientSize.Width - (padding * 2), DpiScale(20)), new StringFormat { Alignment = StringAlignment.Center });
+        }
+    }
+
+    private void DrawRow(Graphics graphics, string label, string value, Font labelFont, Font valueFont, Brush white, Brush muted, StringFormat left, StringFormat right, int padding, ref int y)
+    {
+        var rowHeight = DpiScale(34);
+        graphics.DrawString(label, labelFont, muted, new RectangleF(padding, y, ClientSize.Width - (padding * 2), rowHeight), left);
+        graphics.DrawString(value, valueFont, white, new RectangleF(padding, y, ClientSize.Width - (padding * 2), rowHeight), right);
+        y += rowHeight;
+    }
+
+    private static GraphicsPath RoundedRect(Rectangle bounds, int radius)
+    {
+        var path = new GraphicsPath();
+        var diameter = radius * 2;
+        path.AddArc(bounds.Left, bounds.Top, diameter, diameter, 180, 90);
+        path.AddArc(bounds.Right - diameter, bounds.Top, diameter, diameter, 270, 90);
+        path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
+        path.AddArc(bounds.Left, bounds.Bottom - diameter, diameter, diameter, 90, 90);
+        path.CloseFigure();
+        return path;
     }
 
     private void BeginDrag(object? sender, MouseEventArgs e)
@@ -125,6 +208,7 @@ internal sealed class FloatingPerformanceForm : Form
         }
 
         _dragging = true;
+        _dragMoved = false;
         _dragCursor = Cursor.Position;
         _dragStart = Location;
     }
@@ -136,9 +220,14 @@ internal sealed class FloatingPerformanceForm : Form
             return;
         }
 
-        Location = new Point(
-            _dragStart.X + Cursor.Position.X - _dragCursor.X,
-            _dragStart.Y + Cursor.Position.Y - _dragCursor.Y);
+        var deltaX = Cursor.Position.X - _dragCursor.X;
+        var deltaY = Cursor.Position.Y - _dragCursor.Y;
+        if (Math.Abs(deltaX) >= DpiScale(DRAG_THRESHOLD) || Math.Abs(deltaY) >= DpiScale(DRAG_THRESHOLD))
+        {
+            _dragMoved = true;
+        }
+
+        Location = new Point(_dragStart.X + deltaX, _dragStart.Y + deltaY);
     }
 
     private void EndDrag(object? sender, MouseEventArgs e)
@@ -149,67 +238,13 @@ internal sealed class FloatingPerformanceForm : Form
         }
 
         _dragging = false;
-        SnapToNearestEdge();
-    }
-
-    private void ToggleSnap(object? sender, EventArgs e)
-    {
-        if (_snapped)
+        if (_dragMoved)
         {
-            _snapped = false;
-            Width = DpiScale(EXPANDED_WIDTH);
-        }
-        else
-        {
-            SnapToNearestEdge(force: true);
-        }
-    }
-
-    private void AddMetric(TableLayoutPanel panel, string title, Label value, int column, int row)
-    {
-        var label = new Label { Text = title, AutoSize = true, ForeColor = SystemColors.GrayText, Margin = new Padding(0) };
-        panel.Controls.Add(label, column, row);
-        panel.Controls.Add(value, column, row + 1);
-    }
-
-    private void RefreshValues()
-    {
-        var sample = _readSnapshot();
-        _cpuTemperature.Text = Temperature(sample.CpuTemperature);
-        _gpuTemperature.Text = Temperature(sample.GpuTemperature);
-        _cpuLoad.Text = Percent(sample.CpuLoad);
-        _gpuLoad.Text = Percent(sample.GpuLoad);
-        _memory.Text = Percent(sample.MemoryLoad);
-        if (!_cleaning)
-        {
-            _result.Text = "";
-        }
-    }
-
-    private async Task CleanMemoryAsync()
-    {
-        if (MessageBox.Show(this, _t["floating.confirm"], _t["floating.clean"], MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
-        {
+            SnapToNearestEdge();
             return;
         }
 
-        _cleaning = true;
-        _clean.Enabled = false;
-        _result.Text = _t["floating.cleaning"];
-        try
-        {
-            var result = await Task.Run(MemoryOptimizer.CleanOtherProcesses);
-            _result.Text = _t["floating.done", result.Succeeded, result.Skipped];
-        }
-        catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception or UnauthorizedAccessException)
-        {
-            _result.Text = exception.Message;
-        }
-        finally
-        {
-            _cleaning = false;
-            _clean.Enabled = true;
-        }
+        _ = CleanMemoryAsync();
     }
 
     private void SnapToNearestEdge(bool force = false)
@@ -217,35 +252,61 @@ internal sealed class FloatingPerformanceForm : Form
         var screen = Screen.FromControl(this).WorkingArea;
         var leftDistance = Math.Abs(Left - screen.Left);
         var rightDistance = Math.Abs(screen.Right - Right);
-        var snap = force || Math.Min(leftDistance, rightDistance) <= DpiScale(SNAP_DISTANCE);
-        if (!snap)
+        var nearEdge = Math.Min(leftDistance, rightDistance) <= DpiScale(SNAP_DISTANCE);
+        _snapped = force || nearEdge;
+        ApplyMode();
+        if (!_snapped)
         {
-            _snapped = false;
-            Width = DpiScale(EXPANDED_WIDTH);
             return;
         }
 
-        _snapped = true;
-        Width = DpiScale(EDGE_WIDTH);
         Left = rightDistance <= leftDistance ? screen.Right - Width : screen.Left;
         Top = Math.Clamp(Top, screen.Top, Math.Max(screen.Top, screen.Bottom - Height));
     }
 
-    private void ApplyWidth()
+    private async Task CleanMemoryAsync()
     {
-        if (_snapped)
+        if (_cleaning)
         {
-            Width = DpiScale(EDGE_WIDTH);
+            return;
+        }
+
+        if (MessageBox.Show(this, _t["floating.confirm"], _t["floating.clean"], MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+        {
+            return;
+        }
+
+        _cleaning = true;
+        _status = _t["floating.cleaning"];
+        Invalidate();
+        try
+        {
+            var result = await Task.Run(MemoryOptimizer.CleanOtherProcesses);
+            _status = _t["floating.done", result.Succeeded, result.Skipped];
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception or UnauthorizedAccessException)
+        {
+            _status = exception.Message;
+        }
+        finally
+        {
+            _cleaning = false;
+            _statusUntil = DateTimeOffset.Now.AddSeconds(4);
+            Invalidate();
         }
     }
 
     private int DpiScale(int logical) => (int)Math.Round(logical * DeviceDpi / 96d);
-
-    private static Label ValueLabel() => new() { AutoSize = true, Font = new Font((SystemFonts.MessageBoxFont ?? Control.DefaultFont).FontFamily, 12f, FontStyle.Bold), Margin = new Padding(0, 0, 0, Ui.SPACING) };
 
     private static string Temperature(double? value) =>
         value is { } number ? $"{number.ToString("0.#", CultureInfo.InvariantCulture)} °C" : "—";
 
     private static string Percent(double? value) =>
         value is { } number ? $"{number.ToString("0", CultureInfo.InvariantCulture)}%" : "—";
+
+    private static string TemperaturePair(double? cpu, double? gpu) =>
+        $"{ShortTemperature(cpu)}/{ShortTemperature(gpu)}°C";
+
+    private static string ShortTemperature(double? value) =>
+        value is { } number ? number.ToString("0", CultureInfo.InvariantCulture) : "—";
 }

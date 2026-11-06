@@ -338,6 +338,8 @@
   "tray.exit": "Exit",
   "tray.hint": "The program is still running in the background. Double-click the icon to restore it.",
   "floating.title": "Performance",
+  "floating.ballLabel": "CPU / GPU",
+  "floating.clickHint": "Click to clean memory",
   "floating.cpuTemperature": "CPU temp",
   "floating.gpuTemperature": "GPU temp",
   "floating.cpuLoad": "CPU load",

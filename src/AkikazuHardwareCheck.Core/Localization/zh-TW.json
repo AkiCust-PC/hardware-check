@@ -338,6 +338,8 @@
   "tray.exit": "結束",
   "tray.hint": "程式仍在背景執行，按兩下圖示可恢復視窗。",
   "floating.title": "效能",
+  "floating.ballLabel": "CPU / GPU",
+  "floating.clickHint": "點擊清理記憶體",
   "floating.cpuTemperature": "處理器溫度",
   "floating.gpuTemperature": "顯示卡溫度",
   "floating.cpuLoad": "處理器使用率",
