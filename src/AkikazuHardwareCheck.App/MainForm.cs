@@ -785,7 +785,6 @@ internal sealed class MainForm : Form
         var view = menu.AddSubmenu(_t["ui.menuView"]);
         NativeMenu.AddItem(view, MenuCommand.ShowHardware, _t["ui.showHardware"]);
         NativeMenu.AddItem(view, MenuCommand.ShowMonitor, _t["ui.showMonitor"]);
-        NativeMenu.AddItem(view, MenuCommand.ShowTests, _t["ui.showTests"]);
         NativeMenu.AddItem(view, MenuCommand.AlwaysOnTop, _t["ui.alwaysOnTop"]);
         NativeMenu.AddItem(view, MenuCommand.Floating, _t["tray.floating"]);
         NativeMenu.AddSeparator(view);
@@ -883,11 +882,6 @@ internal sealed class MainForm : Form
                 EnsureSomePanelVisible();
                 ApplyPanels();
                 break;
-            case MenuCommand.ShowTests:
-                SaveSettings(_settings with { IsTestPanelHidden = !_settings.IsTestPanelHidden });
-                EnsureSomePanelVisible();
-                ApplyPanels();
-                break;
             case MenuCommand.AlwaysOnTop:
                 SaveSettings(_settings with { IsAlwaysOnTop = !_settings.IsAlwaysOnTop });
                 TopMost = _settings.IsAlwaysOnTop;
@@ -955,8 +949,9 @@ internal sealed class MainForm : Form
 
         var showsHardware = !_settings.IsHardwarePanelHidden;
         var showsMonitor = !_settings.IsMonitorPanelHidden;
-        var showsTests = !_settings.IsTestPanelHidden;
-        if (!showsHardware && !showsMonitor && !showsTests)
+        // Tests no longer have a view toggle; they stay available in the main window and can be moved out.
+        const bool showsTests = true;
+        if (!showsHardware && !showsMonitor)
         {
             showsMonitor = true;
         }
@@ -1595,6 +1590,8 @@ internal sealed class MainForm : Form
             return;
         }
 
+        _controlGroup.Visible = true;
+        _resultGroup.Visible = true;
         var form = new TestWorkspaceForm(_t, resultsOnly ? null : _controlGroup, _resultGroup, Font);
         form.FormClosing += (_, _) => RestoreTestWorkspace();
         form.FormClosed += (_, _) => _testWorkspace = null;
@@ -1708,9 +1705,7 @@ internal sealed class MainForm : Form
         // One card leaves nothing to choose, so the row appears only with two or more.
         var hasChoice = candidates.Count > 1;
         _targetPanel.Visible = hasChoice;
-        _rightPanel.RowStyles[1].Height = _settings.IsTestPanelHidden
-            ? 0
-            : LogicalToDeviceUnits(hasChoice ? CONTROL_SECTION_HEIGHT : CONTROL_SECTION_COMPACT_HEIGHT);
+        _rightPanel.RowStyles[1].Height = LogicalToDeviceUnits(hasChoice ? CONTROL_SECTION_HEIGHT : CONTROL_SECTION_COMPACT_HEIGHT);
         for (var index = 0; index < candidates.Count; index++)
         {
             // Numbered because two identical cards would otherwise read the same.
@@ -2139,7 +2134,6 @@ internal sealed class MainForm : Form
             menu.SetEnabled(MenuCommand.Maintenance, true);
             menu.SetChecked(MenuCommand.ShowHardware, !_settings.IsHardwarePanelHidden);
             menu.SetChecked(MenuCommand.ShowMonitor, !_settings.IsMonitorPanelHidden);
-            menu.SetChecked(MenuCommand.ShowTests, !_settings.IsTestPanelHidden);
             menu.SetChecked(MenuCommand.AlwaysOnTop, _settings.IsAlwaysOnTop);
             menu.SetChecked(MenuCommand.Crosshair, _settings.CrosshairEnabled);
             menu.SetEnabled(MenuCommand.RestartToFirmware, !isRunning);
