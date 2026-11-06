@@ -19,6 +19,10 @@ internal sealed class MainForm : Form
 {
     private const int PROGRESS_MAX = Ui.PERCENT_MAX;
     private const double PERCENT = 100;
+    private const double CPU_VOLTAGE_FULL_SCALE = 1.5;
+    private const double GPU_VOLTAGE_FULL_SCALE = 1.5;
+    private const double CPU_CLOCK_FULL_SCALE = 6000;
+    private const double GPU_CLOCK_FULL_SCALE = 3000;
 
     private static readonly TimeSpan LiveInterval = TimeSpan.FromSeconds(1);
 
@@ -2191,14 +2195,18 @@ internal sealed class MainForm : Form
     {
         var model = SelectedTarget()?.Model;
         ShowMetrics(SensorSelector.CpuTemperature(readings), SensorSelector.CpuLoad(readings), SensorSelector.GpuTemperature(readings, model), SensorSelector.GpuLoad(readings, model));
-        ShowPlain(_cpuVoltageTile, Format(SensorSelector.CpuVoltage(readings), "0.000", "V"));
-        ShowPlain(_cpuClockTile, Format(SensorSelector.CpuClock(readings), "0", "MHz"));
-        ShowPlain(_gpuVoltageTile, Format(SensorSelector.GpuVoltage(readings, model), "0.000", "V"));
-        ShowPlain(_gpuClockTile, Format(SensorSelector.GpuClock(readings, model), "0", "MHz"));
+        ShowReading(_cpuVoltageTile, SensorSelector.CpuVoltage(readings), CPU_VOLTAGE_FULL_SCALE, "0.000", "V");
+        ShowReading(_cpuClockTile, SensorSelector.CpuClock(readings), CPU_CLOCK_FULL_SCALE, "0", "MHz");
+        ShowReading(_gpuVoltageTile, SensorSelector.GpuVoltage(readings, model), GPU_VOLTAGE_FULL_SCALE, "0.000", "V");
+        ShowReading(_gpuClockTile, SensorSelector.GpuClock(readings, model), GPU_CLOCK_FULL_SCALE, "0", "MHz");
         ShowFans(SensorSelector.Fans(readings), SensorSelector.FanMaximums(readings));
     }
 
-    private static void ShowPlain(MetricTile tile, string text) => tile.Show(text, null, MetricLevel.Normal);
+    private static void ShowReading(MetricTile tile, double? value, double maximum, string format, string unit)
+    {
+        var fraction = value is { } number && maximum > 0 ? Math.Clamp(number / maximum, 0, 1) : (double?)null;
+        tile.Show(Format(value, format, unit), fraction, MetricLevel.Normal);
+    }
 
     /// <summary>Only fans that can be read get a tile. They fill the row from the left, and the row itself goes when there are none.</summary>
     private void ShowFans(FanSpeeds fans, FanMaxima maxima)

@@ -17,7 +17,7 @@ public class DisplayNamesTests
         new MotherboardInfo("ASUSTeK COMPUTER INC.", "ROG STRIX B860-G GAMING WIFI", "1801", "2025-09-12"),
         memory ?? new MemoryInfo(48UL << 30, 48UL << 30, [new MemoryModule("A", 24UL << 30, "DDR5", "G Skill Intl", "F5-8400J4052G24G", 8400, 8400, 1400), new MemoryModule("B", 24UL << 30, "DDR5", "G Skill Intl", "F5-8400J4052G24G", 8400, 8400, 1400)]),
         [new DiskInfo("0", "CT2000T700SSD3", 2_000_398_934_016, "SSD", "NVMe", "Healthy", true, 5, 4)],
-        [new DisplayInfo("LG Ultra HD", "GSM", "1", 2020, 3840, 2160, 60, 27.2, "DisplayPort", true, "Arc")],
+        [new DisplayInfo("LG Ultra HD", "GSM", "1", 2020, 3840, 2160, 60, 27.2, "DisplayPort", true, "Intel(R) Arc(TM) Pro B60 Graphics")],
         [],
         new NetworkConnection(NetworkKind.WiFi, "MediaTek", 2882),
         new SystemDriveSpace(600_000_000_000, 2_000_000_000_000),
@@ -40,7 +40,7 @@ public class DisplayNamesTests
         Assert.Equal("ASUS ROG STRIX B860-G GAMING WIFI BIOS 1801 2025-09-12", Value(Hardware(), "主板"));
         Assert.Equal("G.Skill DDR5 48GB (24GB × 2) 8400MT/s F5-8400J4052G24G", Value(Hardware(), "内存"));
         Assert.Equal("Crucial CT2000T700SSD3 2TB NVMe SSD PCIe 5.0 x4", Value(Hardware(), "硬盘"));
-        Assert.Equal("LG Ultra HD 3840 × 2160 60Hz 27.2英寸 DisplayPort", Value(Hardware(), "显示器"));
+        Assert.Equal("LG Ultra HD 3840 × 2160 60Hz 27.2英寸 DisplayPort Intel(R) Arc(TM) Pro B60 Graphics (独立显卡)", Value(Hardware(), "显示器"));
         Assert.Equal("Wi-Fi 连接 2.9Gbps", Value(Hardware(), "网络"));
         Assert.Equal("已用 600GB / 共 2TB", Value(Hardware(), "系统盘空间"));
         Assert.All(lines, line => Assert.DoesNotContain("|", line.Value));

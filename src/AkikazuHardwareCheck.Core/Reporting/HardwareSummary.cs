@@ -48,7 +48,7 @@ public static class HardwareSummary
         AddIfRead(t["section.motherboard"], hardware.Motherboard is { } board ? FormatBoard(board, unavailable, isFull) : null);
         AddIfRead(t["section.memory"], hardware.Memory is { } memory ? FormatMemory(memory, unavailable) : null);
         AddAll(t["section.disks"], hardware.Disks, disk => isFull ? FormatDiskWithHealth(t, hardware, disk, unavailable) : FormatDisk(disk, unavailable));
-        AddAll(t["section.displays"], hardware.Displays, display => FormatDisplay(t, display, unavailable));
+        AddAll(t["section.displays"], hardware.Displays, display => FormatDisplay(t, display, unavailable, hardware));
         if (isFull)
         {
             AddAll(t["summary.wiredCard"], hardware.WiredAdapters ?? [], name => name);
@@ -309,8 +309,16 @@ public static class HardwareSummary
         return string.Join(" ", parts.Where(part => part is not null));
     }
 
-    private static string FormatDisplay(Translator t, DisplayInfo display, string unavailable)
+    private static string FormatDisplay(Translator t, DisplayInfo display, string unavailable, HardwareInventory hardware)
     {
+        var connectedGpu = display.ConnectedGpu is { } name
+            ? hardware.Gpus.FirstOrDefault(gpu => gpu.Model == name)?.Kind switch
+            {
+                GpuKind.Integrated => $"{name} ({t["gpu.kind.integrated"]})",
+                GpuKind.Discrete => $"{name} ({t["gpu.kind.discrete"]})",
+                _ => name,
+            }
+            : null;
         string?[] parts =
         [
             display.Name ?? unavailable,
@@ -318,6 +326,7 @@ public static class HardwareSummary
             display.RefreshRateHz is { } rate ? $"{Math.Round(rate).ToString(CultureInfo.InvariantCulture)}Hz" : null,
             display.DiagonalInches is { } inches ? t["summary.inches", inches.ToString("0.#", CultureInfo.InvariantCulture)] : null,
             DisplayNames.Connection(t, display.Connection),
+            connectedGpu,
         ];
         return string.Join(" ", parts.Where(part => part is not null));
     }
