@@ -268,6 +268,9 @@ internal sealed class PeripheralTestForm : Form
         keys.AddRange(Enumerable.Range((int)Keys.D0, 10).Select(value => (Keys)value));
         keys.AddRange(Enumerable.Range((int)Keys.F1, 12).Select(value => (Keys)value));
         keys.AddRange([Keys.Up, Keys.Down, Keys.Left, Keys.Right, Keys.Space, Keys.Enter, Keys.Back, Keys.Tab, Keys.Escape, Keys.Insert, Keys.Delete, Keys.Home, Keys.End, Keys.PageUp, Keys.PageDown, Keys.LShiftKey, Keys.RShiftKey, Keys.LControlKey, Keys.RControlKey, Keys.LMenu, Keys.RMenu]);
+        keys.AddRange([Keys.OemSemicolon, Keys.OemQuestion, Keys.Oemtilde, Keys.OemOpenBrackets, Keys.OemPipe, Keys.OemCloseBrackets, Keys.OemQuotes, Keys.OemBackslash, Keys.Oemcomma, Keys.OemPeriod, Keys.OemMinus, Keys.Oemplus]);
+        keys.AddRange([Keys.NumPad0, Keys.NumPad1, Keys.NumPad2, Keys.NumPad3, Keys.NumPad4, Keys.NumPad5, Keys.NumPad6, Keys.NumPad7, Keys.NumPad8, Keys.NumPad9, Keys.Add, Keys.Subtract, Keys.Multiply, Keys.Divide, Keys.Decimal, Keys.NumLock]);
+        keys.AddRange([Keys.CapsLock, Keys.PrintScreen, Keys.Scroll, Keys.Pause, Keys.LWin, Keys.RWin, Keys.Apps, Keys.Sleep]);
         foreach (var key in keys.Distinct())
         {
             _keys.Items.Add(key);
