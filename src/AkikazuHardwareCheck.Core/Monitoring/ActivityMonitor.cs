@@ -223,7 +223,7 @@ public sealed class ActivityMonitor : IDisposable
         try
         {
             var gateway = _adapter?.GetIPProperties().GatewayAddresses.FirstOrDefault()?.Address;
-            if (gateway is null)
+            if (gateway is null || gateway.Equals(IPAddress.Any) || gateway.Equals(IPAddress.IPv6Any))
             {
                 _latencyMilliseconds = null;
                 return null;
@@ -233,7 +233,7 @@ public sealed class ActivityMonitor : IDisposable
             var reply = ping.Send(gateway, LATENCY_TIMEOUT_MS);
             _latencyMilliseconds = reply.Status == IPStatus.Success ? reply.RoundtripTime : null;
         }
-        catch (Exception exception) when (exception is NetworkInformationException or PingException or InvalidOperationException or PlatformNotSupportedException)
+        catch (Exception exception) when (exception is NetworkInformationException or PingException or InvalidOperationException or PlatformNotSupportedException or ArgumentException)
         {
             _latencyMilliseconds = null;
         }
