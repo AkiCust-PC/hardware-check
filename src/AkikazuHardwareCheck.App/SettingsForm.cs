@@ -13,7 +13,7 @@ internal sealed class SettingsForm : Form
     private const int MAX_LIMIT_CELSIUS = 110;
     private const int LABEL_WIDTH = 220;
     private const int FOLDER_BOX_WIDTH = 330;
-    private const int TAB_WIDTH = 620;
+    private const int TAB_WIDTH = 720;
     private const int TAB_HEIGHT = 390;
     private const string LICENSE_PREFIX = "license.";
 
@@ -239,10 +239,12 @@ internal sealed class SettingsForm : Form
 
     private TableLayoutPanel Fields()
     {
+        // Docked to the top so the rows keep their own height. A filled table gives the leftover height to its last
+        // row, which moved the last label far below its field.
         var panel = new TableLayoutPanel
         {
             AutoSize = true,
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
             ColumnCount = 2,
             Padding = new Padding(Ui.SPACING),
             Margin = new Padding(0),

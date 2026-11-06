@@ -33,7 +33,7 @@ internal static class Program
         {
             try
             {
-                Process.Start(new ProcessStartInfo(path, NO_ELEVATE_ARGUMENT) { UseShellExecute = true, Verb = "runas" })?.Dispose();
+                Process.Start(new ProcessStartInfo(path, ElevationArguments(args)) { UseShellExecute = true, Verb = "runas" })?.Dispose();
                 return;
             }
             catch (Win32Exception)
@@ -167,4 +167,14 @@ internal static class Program
         using var identity = WindowsIdentity.GetCurrent();
         return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
     }
+
+    /// <summary>
+    /// The elevated copy must keep the other switches, such as --tray from autostart, and must not ask to elevate twice.
+    /// </summary>
+    private static string ElevationArguments(string[] args) =>
+        string.Join(
+            ' ',
+            args.Where(argument => !string.Equals(argument, NO_ELEVATE_ARGUMENT, StringComparison.OrdinalIgnoreCase))
+                .Append(NO_ELEVATE_ARGUMENT)
+                .Select(argument => argument.Contains(' ') ? $"\"{argument}\"" : argument));
 }

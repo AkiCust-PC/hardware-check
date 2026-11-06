@@ -154,6 +154,10 @@ internal sealed class MainForm : Form
     private string? _statusText;
     private bool _closeAfterTest;
     private NotifyIcon? _trayIcon;
+    private ContextMenuStrip? _trayMenu;
+    private ToolStripMenuItem? _trayCrosshairItem;
+    private string? _trayMenuLanguage;
+    private uint _taskbarCreatedMessage;
     private bool _isExiting;
     private readonly bool _startHidden;
 
@@ -211,10 +215,24 @@ internal sealed class MainForm : Form
         _menu = null;
         BuildMenu();
         UpdateCommandStates();
+        // Explorer broadcasts this after a restart, when every notification icon must be added again.
+        _taskbarCreatedMessage = RegisterWindowMessageW("TaskbarCreated");
     }
 
     protected override void WndProc(ref Message m)
     {
+        // Explorer rebuilt the notification area and dropped the icon; announce it again.
+        if (_taskbarCreatedMessage != 0 && (uint)m.Msg == _taskbarCreatedMessage)
+        {
+            if (_trayIcon is { Visible: true })
+            {
+                _trayIcon.Visible = false;
+                _trayIcon.Visible = true;
+            }
+
+            return;
+        }
+
         // Menus report through WM_COMMAND with no control handle; messages from child controls keep their normal path.
         if (m.Msg == WM_COMMAND && m.LParam == IntPtr.Zero && (m.WParam.ToInt64() >> 16) == 0)
         {
@@ -315,8 +333,7 @@ internal sealed class MainForm : Form
 
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
-        _trayIcon?.Dispose();
-        _trayIcon = null;
+        DisposeTrayIcon();
         base.OnFormClosed(e);
     }
 
@@ -324,6 +341,9 @@ internal sealed class MainForm : Form
     {
         ShowInTaskbar = false;
         Hide();
+        // The separate test and hardware windows belong to this program, so hiding here must not leave them on screen.
+        _testWorkspace?.Hide();
+        _hardwareWindow?.Hide();
     }
 
     /// <summary>Called by the hidden single-instance listener when another launch asks for this window.</summary>
@@ -351,6 +371,7 @@ internal sealed class MainForm : Form
             WindowState = FormWindowState.Normal;
         }
 
+        ShowAuxiliaryWindows();
         Activate();
         BringToFront();
     }
@@ -364,8 +385,22 @@ internal sealed class MainForm : Form
             WindowState = FormWindowState.Normal;
         }
 
+        ShowAuxiliaryWindows();
         Activate();
         BringToFront();
+    }
+
+    private void ShowAuxiliaryWindows()
+    {
+        if (_testWorkspace is { IsDisposed: false } test)
+        {
+            test.Show();
+        }
+
+        if (_hardwareWindow is { IsDisposed: false } hardware)
+        {
+            hardware.Show();
+        }
     }
 
     private void ExitApplication()
@@ -376,26 +411,73 @@ internal sealed class MainForm : Form
 
     private void UpdateTrayIcon()
     {
-        _trayIcon?.Dispose();
-        _trayIcon = null;
         if (!_settings.ShowTrayIcon)
         {
+            DisposeTrayIcon();
             return;
         }
 
-        var menu = new ContextMenuStrip();
-        var crosshair = new ToolStripMenuItem(_t["crosshair.toggle"]) { Checked = _settings.CrosshairEnabled };
-        crosshair.Click += (_, _) => ToggleCrosshair();
-        menu.Items.Add(crosshair);
-
-        _trayIcon = new NotifyIcon
+        // The notification icon itself is created once. Removing and re-adding it on every settings save can leave
+        // it missing from the notification area until Explorer restarts, so only its menu and state change here.
+        if (_trayIcon is null)
         {
-            Icon = Ui.AppIcon,
-            Text = _t["ui.appName"],
-            Visible = true,
-            ContextMenuStrip = menu,
-        };
-        _trayIcon.DoubleClick += (_, _) => RestoreFromTray();
+            _trayIcon = new NotifyIcon { Icon = Ui.AppIcon, Text = _t["ui.appName"] };
+            _trayIcon.DoubleClick += (_, _) => RestoreFromTray();
+        }
+
+        if (_trayMenu is null || _trayMenuLanguage != _t.Language)
+        {
+            var previous = _trayMenu;
+            _trayMenu = BuildTrayMenu();
+            _trayMenuLanguage = _t.Language;
+            _trayIcon.ContextMenuStrip = _trayMenu;
+            previous?.Dispose();
+        }
+
+        if (_trayCrosshairItem is not null)
+        {
+            _trayCrosshairItem.Checked = _settings.CrosshairEnabled;
+        }
+
+        _trayIcon.Text = _t["ui.appName"];
+        _trayIcon.Visible = true;
+    }
+
+    private void DisposeTrayIcon()
+    {
+        _trayIcon?.Dispose();
+        _trayIcon = null;
+        _trayMenu?.Dispose();
+        _trayMenu = null;
+        _trayCrosshairItem = null;
+        _trayMenuLanguage = null;
+    }
+
+    /// <summary>
+    /// Closing the main window hides it, so the tray stays the way back and the way out.
+    /// </summary>
+    private ContextMenuStrip BuildTrayMenu()
+    {
+        var menu = new ContextMenuStrip();
+        menu.Items.Add(Item(_t["tray.open"], (_, _) => RestoreFromTray()));
+        menu.Items.Add(Item(_t["tray.floating"], (_, _) => ShowFloating()));
+        _trayCrosshairItem = new ToolStripMenuItem(_t["crosshair.toggle"]) { Checked = _settings.CrosshairEnabled };
+        _trayCrosshairItem.Click += (_, _) => ToggleCrosshair();
+        menu.Items.Add(_trayCrosshairItem);
+        menu.Items.Add(Item(_t["tray.chart"], (_, _) => ShowLiveChart()));
+        menu.Items.Add(Item(_t["tray.diagnostic"], (_, _) => ShowMaintenance()));
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(Item(_t["tray.settings"], (_, _) => OpenSettingsForm()));
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(Item(_t["tray.exit"], (_, _) => ExitApplication()));
+        return menu;
+    }
+
+    private static ToolStripMenuItem Item(string text, EventHandler onClick)
+    {
+        var item = new ToolStripMenuItem(text);
+        item.Click += onClick;
+        return item;
     }
 
     private static string? Number(double? value) => value?.ToString("0.#", CultureInfo.InvariantCulture);
@@ -1213,8 +1295,18 @@ internal sealed class MainForm : Form
         body.ColumnStyles[0].Width = primaryWidth;
         body.ColumnStyles[1].SizeType = SizeType.Absolute;
         body.ColumnStyles[1].Width = secondaryWidth;
-        hardware.MaximumSize = new Size(secondaryWidth, 0);
-        _hardwareList.MaximumSize = new Size(Math.Max(1, secondaryWidth - (Ui.SPACING * 3)), 0);
+        if (hardware.Parent == body)
+        {
+            hardware.MaximumSize = new Size(secondaryWidth, 0);
+            _hardwareList.MaximumSize = new Size(Math.Max(1, secondaryWidth - (Ui.SPACING * 3)), 0);
+        }
+        else
+        {
+            // The panel is hosted by its own window, so the main window's column width must not clamp it to nothing.
+            hardware.MaximumSize = Size.Empty;
+            _hardwareList.MaximumSize = Size.Empty;
+        }
+
         _rightPanel.MaximumSize = new Size(Math.Max(0, primaryWidth), 0);
     }
 
@@ -1397,6 +1489,11 @@ internal sealed class MainForm : Form
         _advancedForm = null;
         _chartForm?.Close();
         _chartForm = null;
+        // The moved test and hardware panels keep their old window title and metrics, so they return first and reopen.
+        _testWorkspace?.Close();
+        _testWorkspace = null;
+        _hardwareWindow?.Close();
+        _hardwareWindow = null;
         _floatingForm?.Dispose();
         _floatingForm = null;
 
@@ -1698,6 +1795,8 @@ internal sealed class MainForm : Form
                 existing.WindowState = FormWindowState.Normal;
             }
 
+            // Hiding to the tray hides this window too, so opening it again has to bring it back.
+            existing.Show();
             existing.Activate();
             return;
         }
@@ -1724,6 +1823,7 @@ internal sealed class MainForm : Form
     {
         if (_hardwareWindow is { IsDisposed: false } existing)
         {
+            existing.Show();
             existing.Activate();
             return;
         }
@@ -2537,6 +2637,9 @@ internal sealed class MainForm : Form
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool SystemParametersInfo(uint action, uint parameter, ref IntPtr value, uint flags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern uint RegisterWindowMessageW(string message);
 
     private void OpenSettingsForm()
     {
