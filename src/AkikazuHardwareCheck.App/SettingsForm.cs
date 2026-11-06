@@ -13,6 +13,8 @@ internal sealed class SettingsForm : Form
     private const int MAX_LIMIT_CELSIUS = 110;
     private const int LABEL_WIDTH = 220;
     private const int FOLDER_BOX_WIDTH = 330;
+    private const int TAB_WIDTH = 620;
+    private const int TAB_HEIGHT = 390;
     private const string LICENSE_PREFIX = "license.";
 
     private readonly AppSettings _original;
@@ -24,10 +26,15 @@ internal sealed class SettingsForm : Form
     private readonly CheckBox _showTrayIcon = Option();
     private readonly CheckBox _closeToTray = Option();
     private readonly CheckBox _startWithWindows = Option();
+    private readonly CheckBox _crosshairEnabled = Option();
+    private readonly Translator _t;
+    private CrosshairSettings _crosshair;
 
     public SettingsForm(Translator t, AppSettings settings, Font font)
     {
+        _t = t;
         _original = settings;
+        _crosshair = CrosshairSettings.FromSettings(settings);
         Font = font;
         Text = t["ui.settings"];
         Icon = Ui.AppIcon;
@@ -48,25 +55,18 @@ internal sealed class SettingsForm : Form
         _showTrayIcon.Checked = settings.ShowTrayIcon;
         _closeToTray.Checked = settings.CloseToTray;
         _startWithWindows.Checked = settings.StartWithWindows || StartupRegistration.IsEnabled();
+        _crosshairEnabled.Checked = settings.CrosshairEnabled;
 
-        var browseButton = Ui.Button();
-        browseButton.Text = t["ui.browse"];
-        browseButton.Click += (_, _) => BrowseFolder();
-        var folderRow = Ui.Flow();
-        folderRow.WrapContents = false;
-        folderRow.Controls.AddRange([_folderBox, browseButton]);
-
-        var fields = new TableLayoutPanel { AutoSize = true, ColumnCount = 2, Margin = new Padding(0) };
-        fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, LogicalToDeviceUnits(LABEL_WIDTH)));
-        fields.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        AddField(fields, t["ui.reportFolder"], folderRow);
-        AddField(fields, t["ui.gpuSeconds"], _gpuSeconds);
-        AddField(fields, t["ui.cpuSeconds"], _cpuSeconds);
-        AddField(fields, t["ui.cpuLimit"], _cpuLimit);
-        AddField(fields, t["ui.gpuLimit"], _gpuLimit);
-        AddField(fields, t["ui.showTrayIcon"], _showTrayIcon);
-        AddField(fields, t["ui.closeToTray"], _closeToTray);
-        AddField(fields, t["ui.startWithWindows"], _startWithWindows);
+        var tabs = new TabControl
+        {
+            Width = LogicalToDeviceUnits(TAB_WIDTH),
+            Height = LogicalToDeviceUnits(TAB_HEIGHT),
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0),
+        };
+        tabs.TabPages.Add(BuildGeneralPage(t));
+        tabs.TabPages.Add(BuildTestPage(t));
+        tabs.TabPages.Add(BuildCrosshairPage(t));
 
         var okButton = Ui.Button();
         okButton.Text = t["ui.ok"];
@@ -83,7 +83,7 @@ internal sealed class SettingsForm : Form
         CancelButton = cancelButton;
 
         var root = new TableLayoutPanel { AutoSize = true, ColumnCount = 1, Padding = new Padding(Ui.SPACING * 2) };
-        root.Controls.Add(fields, 0, 0);
+        root.Controls.Add(tabs, 0, 0);
         root.Controls.Add(buttons, 0, 1);
         Controls.Add(root);
         Ui.ScaleButtons(this);
@@ -99,7 +99,96 @@ internal sealed class SettingsForm : Form
         ShowTrayIcon = _showTrayIcon.Checked,
         CloseToTray = _closeToTray.Checked,
         StartWithWindows = _startWithWindows.Checked,
+        CrosshairEnabled = _crosshairEnabled.Checked,
+        CrosshairShape = (int)_crosshair.Shape,
+        CrosshairColorArgb = _crosshair.Color.ToArgb(),
+        CrosshairLength = _crosshair.Length,
+        CrosshairThickness = _crosshair.Thickness,
+        CrosshairGap = _crosshair.Gap,
+        CrosshairOpacity = _crosshair.Opacity,
     };
+
+    private TabPage BuildGeneralPage(Translator t)
+    {
+        var page = new TabPage(t["settings.general"]);
+        var browseButton = Ui.Button();
+        browseButton.Text = t["ui.browse"];
+        browseButton.Click += (_, _) => BrowseFolder();
+        var folderRow = Ui.Flow();
+        folderRow.WrapContents = false;
+        folderRow.Controls.AddRange([_folderBox, browseButton]);
+
+        var fields = Fields();
+        AddField(fields, t["ui.reportFolder"], folderRow);
+        AddField(fields, t["ui.showTrayIcon"], _showTrayIcon);
+        AddField(fields, t["ui.closeToTray"], _closeToTray);
+        AddField(fields, t["ui.startWithWindows"], _startWithWindows);
+        page.Controls.Add(fields);
+        return page;
+    }
+
+    private TabPage BuildTestPage(Translator t)
+    {
+        var page = new TabPage(t["settings.tests"]);
+        var fields = Fields();
+        AddField(fields, t["ui.gpuSeconds"], _gpuSeconds);
+        AddField(fields, t["ui.cpuSeconds"], _cpuSeconds);
+        AddField(fields, t["ui.cpuLimit"], _cpuLimit);
+        AddField(fields, t["ui.gpuLimit"], _gpuLimit);
+        page.Controls.Add(fields);
+        return page;
+    }
+
+    private TabPage BuildCrosshairPage(Translator t)
+    {
+        var page = new TabPage(t["settings.crosshair"]);
+        var layout = Fields();
+        _crosshairEnabled.Text = t["crosshair.enable"];
+        AddField(layout, t["crosshair.enable"], _crosshairEnabled);
+
+        var details = Ui.Button();
+        details.Text = t["crosshair.settings"];
+        details.Click += (_, _) => OpenCrosshairEditor();
+        AddField(layout, t["crosshair.shape"], details);
+
+        var hint = new Label
+        {
+            Text = t["crosshair.hint"],
+            AutoSize = true,
+            MaximumSize = new Size(LogicalToDeviceUnits(TAB_WIDTH - 60), 0),
+            ForeColor = SystemColors.GrayText,
+            Margin = new Padding(0, Ui.SPACING, 0, 0),
+        };
+        var row = layout.RowCount++;
+        layout.Controls.Add(hint, 0, row);
+        layout.SetColumnSpan(hint, 2);
+        page.Controls.Add(layout);
+        return page;
+    }
+
+    private void OpenCrosshairEditor()
+    {
+        using var form = new CrosshairSettingsForm(_t, _crosshair, Font);
+        if (form.ShowDialog(this) == DialogResult.OK && form.Result is { } result)
+        {
+            _crosshair = result;
+        }
+    }
+
+    private TableLayoutPanel Fields()
+    {
+        var panel = new TableLayoutPanel
+        {
+            AutoSize = true,
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            Padding = new Padding(Ui.SPACING),
+            Margin = new Padding(0),
+        };
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, LogicalToDeviceUnits(LABEL_WIDTH)));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        return panel;
+    }
 
     private static NumericUpDown Number(int minimum, int maximum) => new()
     {
@@ -147,4 +236,5 @@ internal sealed class SettingsForm : Form
             _folderBox.Text = dialog.SelectedPath;
         }
     }
+
 }

@@ -24,7 +24,6 @@ internal enum MenuCommand
     AlwaysOnTop,
     Floating,
     Crosshair,
-    CrosshairSettings,
     Guide,
     Updates,
     About,

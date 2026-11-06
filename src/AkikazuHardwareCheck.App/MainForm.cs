@@ -368,21 +368,9 @@ internal sealed class MainForm : Form
         }
 
         var menu = new ContextMenuStrip();
-        menu.Items.Add(Item(_t["tray.open"], (_, _) => RestoreFromTray()));
-        menu.Items.Add(Item(_t["tray.floating"], (_, _) => ShowFloating()));
         var crosshair = new ToolStripMenuItem(_t["crosshair.toggle"]) { Checked = _settings.CrosshairEnabled };
         crosshair.Click += (_, _) => ToggleCrosshair();
         menu.Items.Add(crosshair);
-        menu.Items.Add(Item(_t["crosshair.settings"], (_, _) => OpenCrosshairSettings()));
-        menu.Items.Add(Item(_t["tray.chart"], (_, _) => ShowLiveChart()));
-        menu.Items.Add(Item(_t["tray.diagnostic"], (_, _) => ShowMaintenance()));
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(Item(_t["tray.settings"], (_, _) => OpenSettingsForm()));
-        var showIcon = new ToolStripMenuItem(_t["ui.showTrayIcon"]) { Checked = _settings.ShowTrayIcon };
-        showIcon.Click += (_, _) => SaveSettings(_settings with { ShowTrayIcon = false });
-        menu.Items.Add(showIcon);
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(Item(_t["tray.exit"], (_, _) => ExitApplication()));
 
         _trayIcon = new NotifyIcon
         {
@@ -392,13 +380,6 @@ internal sealed class MainForm : Form
             ContextMenuStrip = menu,
         };
         _trayIcon.DoubleClick += (_, _) => RestoreFromTray();
-    }
-
-    private static ToolStripMenuItem Item(string text, EventHandler onClick)
-    {
-        var item = new ToolStripMenuItem(text);
-        item.Click += onClick;
-        return item;
     }
 
     private static string? Number(double? value) => value?.ToString("0.#", CultureInfo.InvariantCulture);
@@ -791,7 +772,6 @@ internal sealed class MainForm : Form
         NativeMenu.AddItem(tools, MenuCommand.Maintenance, _t["ui.maintenance"]);
         NativeMenu.AddSeparator(tools);
         NativeMenu.AddItem(tools, MenuCommand.Crosshair, _t["crosshair.toggle"]);
-        NativeMenu.AddItem(tools, MenuCommand.CrosshairSettings, _t["crosshair.settings"]);
 
         var settings = menu.AddSubmenu(_t["ui.menuSettings"]);
         NativeMenu.AddItem(settings, MenuCommand.Settings, _t["ui.settings"]);
@@ -877,9 +857,6 @@ internal sealed class MainForm : Form
                 break;
             case MenuCommand.Crosshair:
                 ToggleCrosshair();
-                break;
-            case MenuCommand.CrosshairSettings:
-                OpenCrosshairSettings();
                 break;
             case MenuCommand.Exit:
                 ExitApplication();
@@ -1586,27 +1563,6 @@ internal sealed class MainForm : Form
         _crosshairForm = new CrosshairOverlayForm(CurrentCrosshair());
         _crosshairForm.FormClosed += (_, _) => _crosshairForm = null;
         _crosshairForm.Show();
-    }
-
-    private void OpenCrosshairSettings()
-    {
-        using var form = new CrosshairSettingsForm(_t, CurrentCrosshair(), Font);
-        if (form.ShowDialog(this) != DialogResult.OK || form.Result is not { } result)
-        {
-            return;
-        }
-
-        SaveSettings(_settings with
-        {
-            CrosshairShape = (int)result.Shape,
-            CrosshairColorArgb = result.Color.ToArgb(),
-            CrosshairLength = result.Length,
-            CrosshairThickness = result.Thickness,
-            CrosshairGap = result.Gap,
-            CrosshairOpacity = result.Opacity,
-        });
-        UpdateCrosshair();
-        UpdateCommandStates();
     }
 
     private void ShowLiveChart()
@@ -2336,6 +2292,8 @@ internal sealed class MainForm : Form
         if (form.ShowDialog(this) == DialogResult.OK && form.Result is { } settings)
         {
             SaveSettings(settings);
+            UpdateCrosshair();
+            UpdateCommandStates();
         }
     }
 

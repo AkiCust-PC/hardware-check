@@ -18,7 +18,16 @@ internal sealed record CrosshairSettings(
     int Length,
     int Thickness,
     int Gap,
-    int Opacity);
+    int Opacity)
+{
+    public static CrosshairSettings FromSettings(AkikazuHardwareCheck.Core.Configuration.AppSettings settings) => new(
+        (CrosshairShape)Math.Clamp(settings.CrosshairShape, 0, 3),
+        Color.FromArgb(settings.CrosshairColorArgb),
+        Math.Clamp(settings.CrosshairLength, 1, 200),
+        Math.Clamp(settings.CrosshairThickness, 1, 20),
+        Math.Clamp(settings.CrosshairGap, 0, 100),
+        Math.Clamp(settings.CrosshairOpacity, 10, 100));
+}
 
 /// <summary>
 /// A click-through screen overlay. It never reads or writes game memory and never sends input; it only draws pixels.
