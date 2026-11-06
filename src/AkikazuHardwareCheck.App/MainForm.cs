@@ -176,6 +176,7 @@ internal sealed class MainForm : Form
         Icon = Ui.AppIcon;
         KeyPreview = true;
         DoubleBuffered = true;
+        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
         StartPosition = FormStartPosition.CenterScreen;
         // 16:10 default: wide enough for the two information columns without squeezing the monitor.
         ClientSize = new Size(LogicalToDeviceUnits(DEFAULT_CLIENT_WIDTH), LogicalToDeviceUnits(DEFAULT_CLIENT_HEIGHT));
@@ -212,6 +213,9 @@ internal sealed class MainForm : Form
             BeginInvoke(new Action(HideToTray));
         }
 
+        // Paint the shell and the "reading" placeholders before WMI work starts, so the window never appears as a
+        // blank white surface on a slow first run.
+        Refresh();
         _ = LoadHardwareAsync();
     }
 
