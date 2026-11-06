@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using AkikazuHardwareCheck.Core.Diagnostics;
@@ -14,8 +15,8 @@ namespace AkikazuHardwareCheck.App;
 internal sealed class FloatingPerformanceForm : Form
 {
     private const int BALL_SIZE = 96;
-    private const int STRIP_WIDTH = 204;
-    private const int STRIP_HEIGHT = 268;
+    private const int STRIP_WIDTH = 26;
+    private const int STRIP_HEIGHT = 150;
     private const int SNAP_DISTANCE = 28;
     private const int DRAG_THRESHOLD = 4;
     private const int ANIMATION_INTERVAL_MS = 50;
@@ -65,7 +66,7 @@ internal sealed class FloatingPerformanceForm : Form
         ShowInTaskbar = false;
         TopMost = true;
         StartPosition = FormStartPosition.Manual;
-        BackColor = SystemColors.Window;
+        BackColor = Color.Black;
         DoubleBuffered = true;
         ClientSize = new Size(BALL_SIZE, BALL_SIZE);
         SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
@@ -75,14 +76,14 @@ internal sealed class FloatingPerformanceForm : Form
         _animationTimer.Tick += (_, _) =>
         {
             _animationPhase += 0.16;
-            Invalidate();
+            Render();
         };
         _clickTimer.Tick += (_, _) =>
         {
             _clickTimer.Stop();
             _clickPending = false;
             _infoVisible = !_infoVisible;
-            Invalidate();
+            Render();
         };
         Shown += (_, _) =>
         {
@@ -101,6 +102,7 @@ internal sealed class FloatingPerformanceForm : Form
                 PositionInitialBall();
             }
 
+            EnsureVisible();
             RefreshSample();
             _sampleTimer.Start();
             _animationTimer.Start();
@@ -134,27 +136,7 @@ internal sealed class FloatingPerformanceForm : Form
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
-        Glass.Enable(Handle);
-    }
-
-    protected override void OnPaintBackground(PaintEventArgs e)
-    {
-        // The desktop is allowed to show through the glass; the shape is drawn in OnPaint.
-    }
-
-    protected override void OnPaint(PaintEventArgs e)
-    {
-        base.OnPaint(e);
-        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
-        if (_snapped)
-        {
-            DrawStrip(e.Graphics);
-        }
-        else
-        {
-            DrawBall(e.Graphics);
-        }
+        EnableLayered();
     }
 
     private void BuildMenu()
@@ -181,7 +163,7 @@ internal sealed class FloatingPerformanceForm : Form
             _status = null;
         }
 
-        Invalidate();
+        Render();
     }
 
     private void ApplyMode()
@@ -190,27 +172,32 @@ internal sealed class FloatingPerformanceForm : Form
             ? new Size(DpiScale(STRIP_WIDTH), DpiScale(STRIP_HEIGHT))
             : new Size(DpiScale(BALL_SIZE), DpiScale(BALL_SIZE));
         ClientSize = size;
-        Opacity = _snapped ? 0.94 : 0.82;
+        Render();
+    }
+
+    private void Render()
+    {
+        if (!IsHandleCreated || IsDisposed || ClientSize.Width <= 0 || ClientSize.Height <= 0)
+        {
+            return;
+        }
+
+        EnableLayered();
+        using var bitmap = new Bitmap(ClientSize.Width, ClientSize.Height, PixelFormat.Format32bppPArgb);
+        using var graphics = Graphics.FromImage(bitmap);
+        graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+        graphics.Clear(Color.Transparent);
         if (_snapped)
         {
-            Region?.Dispose();
-            Region = null;
+            DrawStrip(graphics);
         }
         else
         {
-            SetEllipseRegion(size);
+            DrawBall(graphics);
         }
 
-        Invalidate();
-    }
-
-    private void SetEllipseRegion(Size size)
-    {
-        using var path = new GraphicsPath();
-        path.AddEllipse(0, 0, Math.Max(1, size.Width - 1), Math.Max(1, size.Height - 1));
-        var previous = Region;
-        Region = new Region(path);
-        previous?.Dispose();
+        UpdateLayered(bitmap);
     }
 
     public (int Left, int Top, bool Snapped, bool InfoVisible) CaptureState() => (Left, Top, _snapped, _infoVisible);
@@ -225,12 +212,29 @@ internal sealed class FloatingPerformanceForm : Form
 
     private void PositionInitialBall()
     {
-        // Anchor near the cursor, which is guaranteed to be on a visible monitor in this interactive session.
-        var cursor = Cursor.Position;
-        var area = Screen.FromPoint(cursor).WorkingArea;
-        Left = Math.Clamp(cursor.X - (Width / 2), area.Left, Math.Max(area.Left, area.Right - Width));
-        var below = cursor.Y + DpiScale(36);
-        Top = below + Height <= area.Bottom ? below : Math.Max(area.Top, cursor.Y - Height - DpiScale(36));
+        // Start near the top-left of the primary work area. A fixed anchor is safer than mixing DPI-scaled
+        // window coordinates with physical screen coordinates on high-DPI monitors.
+        var area = Screen.PrimaryScreen?.WorkingArea ?? SystemInformation.WorkingArea;
+        Left = area.Left + DpiScale(24);
+        Top = area.Top + DpiScale(120);
+    }
+
+    private void EnsureVisible()
+    {
+        if (!GetWindowRect(Handle, out var rect))
+        {
+            return;
+        }
+
+        var bounds = Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom);
+        if (Screen.AllScreens.Any(screen => screen.WorkingArea.IntersectsWith(bounds)))
+        {
+            return;
+        }
+
+        var area = Screen.PrimaryScreen?.WorkingArea ?? SystemInformation.WorkingArea;
+        Left = area.Left + DpiScale(24);
+        Top = area.Top + DpiScale(120);
     }
 
     private void DrawBall(Graphics graphics)
@@ -239,6 +243,7 @@ internal sealed class FloatingPerformanceForm : Form
         using var path = new GraphicsPath();
         path.AddEllipse(bounds);
         DrawGlass(graphics, path, bounds);
+        DrawLiquid(graphics, path, bounds);
 
         var text = SystemColors.ControlText;
         using var textBrush = new SolidBrush(text);
@@ -282,44 +287,45 @@ internal sealed class FloatingPerformanceForm : Form
     private void DrawStrip(Graphics graphics)
     {
         var bounds = new Rectangle(1, 1, Math.Max(1, ClientSize.Width - 3), Math.Max(1, ClientSize.Height - 3));
-        using var path = RoundedRect(bounds, DpiScale(11));
+        using var path = RoundedRect(bounds, DpiScale(8));
         DrawGlass(graphics, path, bounds);
+        DrawLiquid(graphics, path, bounds);
+    }
 
-        var text = SystemColors.ControlText;
-        using var titleFont = new Font(Font.FontFamily, 8.5f, FontStyle.Bold);
-        using var labelFont = new Font(Font.FontFamily, 7.5f, FontStyle.Regular);
-        using var valueFont = new Font(Font.FontFamily, 11f, FontStyle.Bold);
-        using var valueBrush = new SolidBrush(text);
-        using var mutedBrush = new SolidBrush(Color.FromArgb(170, text));
-        using var left = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center };
-        using var right = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center };
-        var padding = DpiScale(12);
-        if (_infoVisible)
+    private void DrawLiquid(Graphics graphics, GraphicsPath container, Rectangle bounds)
+    {
+        var fraction = Math.Clamp((_sample?.MemoryLoad ?? 0) / 100d, 0d, 1d);
+        if (fraction <= 0)
         {
-            graphics.DrawString(_t["floating.title"], titleFont, valueBrush, new RectangleF(padding, DpiScale(10), ClientSize.Width - (padding * 2), DpiScale(20)));
-            var y = DpiScale(44);
-            if (_sample?.CpuTemperature is { } cpu)
-            {
-                DrawRow(graphics, "CPU", $"{cpu.ToString("0", CultureInfo.InvariantCulture)}°C", labelFont, valueFont, valueBrush, mutedBrush, left, right, padding, ref y);
-            }
-
-            if (_sample?.MemoryLoad is { } memory)
-            {
-                DrawRow(graphics, _t["floating.memoryShort"], $"{memory.ToString("0", CultureInfo.InvariantCulture)}%", labelFont, valueFont, valueBrush, mutedBrush, left, right, padding, ref y);
-            }
+            return;
         }
 
-        using var hintFont = new Font(Font.FontFamily, 7.5f, FontStyle.Regular);
-        graphics.DrawString(_t["floating.clickHint"], hintFont, mutedBrush, new RectangleF(padding, ClientSize.Height - DpiScale(25), ClientSize.Width - (padding * 2), DpiScale(18)), new StringFormat { Alignment = StringAlignment.Center });
-        if (_status is not null)
+        var top = bounds.Bottom - (int)Math.Round(bounds.Height * fraction);
+        var amplitude = Math.Max(1, DpiScale(2));
+        var wave = new GraphicsPath();
+        var points = new List<PointF> { new(bounds.Left, bounds.Bottom) };
+        for (var x = bounds.Left; x <= bounds.Right; x += Math.Max(1, DpiScale(3)))
         {
-            graphics.DrawString(_status, hintFont, valueBrush, new RectangleF(padding, ClientSize.Height - DpiScale(45), ClientSize.Width - (padding * 2), DpiScale(18)), new StringFormat { Alignment = StringAlignment.Center });
+            var y = top + (float)(Math.Sin((_animationPhase * 1.8) + (x / (double)DpiScale(12))) * amplitude);
+            points.Add(new PointF(x, y));
         }
+
+        points.Add(new PointF(bounds.Right, bounds.Bottom));
+        wave.AddLines(points.ToArray());
+        wave.CloseFigure();
+        var state = graphics.Save();
+        graphics.SetClip(container);
+        using var liquid = new SolidBrush(Color.FromArgb(105, SystemColors.Highlight));
+        graphics.FillPath(liquid, wave);
+        using var shine = new Pen(Color.FromArgb(55, 255, 255, 255), 1f);
+        graphics.DrawLine(shine, bounds.Left + DpiScale(4), top, bounds.Right - DpiScale(4), top);
+        graphics.Restore(state);
+        wave.Dispose();
     }
 
     private void DrawGlass(Graphics graphics, GraphicsPath path, Rectangle bounds)
     {
-        var tint = Application.IsDarkModeEnabled ? Color.FromArgb(86, 18, 22, 28) : Color.FromArgb(100, 255, 255, 255);
+        var tint = Application.IsDarkModeEnabled ? Color.FromArgb(188, 26, 32, 42) : Color.FromArgb(204, 243, 247, 252);
         using var fill = new SolidBrush(tint);
         graphics.FillPath(fill, path);
         var pulse = (float)((Math.Sin(_animationPhase) + 1) / 2);
@@ -327,14 +333,6 @@ internal sealed class FloatingPerformanceForm : Form
         graphics.DrawPath(ring, path);
         using var inner = new Pen(Color.FromArgb(36, 255, 255, 255), 1f);
         graphics.DrawPath(inner, path);
-    }
-
-    private void DrawRow(Graphics graphics, string label, string value, Font labelFont, Font valueFont, Brush valueBrush, Brush mutedBrush, StringFormat left, StringFormat right, int padding, ref int y)
-    {
-        var rowHeight = DpiScale(27);
-        graphics.DrawString(label, labelFont, mutedBrush, new RectangleF(padding, y, ClientSize.Width - (padding * 2), rowHeight), left);
-        graphics.DrawString(value, valueFont, valueBrush, new RectangleF(padding, y, ClientSize.Width - (padding * 2), rowHeight), right);
-        y += rowHeight;
     }
 
     private static GraphicsPath RoundedRect(Rectangle bounds, int radius)
@@ -464,7 +462,7 @@ internal sealed class FloatingPerformanceForm : Form
 
         _cleaning = true;
         _status = _t["floating.cleaning"];
-        Invalidate();
+        Render();
         try
         {
             var result = await Task.Run(MemoryOptimizer.CleanOtherProcesses);
@@ -478,82 +476,101 @@ internal sealed class FloatingPerformanceForm : Form
         {
             _cleaning = false;
             _statusUntil = DateTimeOffset.Now.AddSeconds(4);
-            Invalidate();
+            Render();
         }
     }
 
     private int DpiScale(int logical) => (int)Math.Round(logical * DeviceDpi / 96d);
 
-    private static class Glass
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect
     {
-        private const int DWMWA_SYSTEMBACKDROP_TYPE = 38;
-        private const int DWMSBT_TRANSIENTWINDOW = 3;
-        private const int WCA_ACCENT_POLICY = 19;
-        private const int ACCENT_ENABLE_ACRYLICBLURBEHIND = 4;
-
-        public static void Enable(IntPtr handle)
-        {
-            var backdrop = DWMSBT_TRANSIENTWINDOW;
-            DwmSetWindowAttribute(handle, DWMWA_SYSTEMBACKDROP_TYPE, ref backdrop, sizeof(int));
-            var margins = new Margins { Left = -1, Right = -1, Top = -1, Bottom = -1 };
-            DwmExtendFrameIntoClientArea(handle, ref margins);
-
-            var accent = new AccentPolicy
-            {
-                AccentState = ACCENT_ENABLE_ACRYLICBLURBEHIND,
-                AccentFlags = 2,
-                GradientColor = 0x01000000,
-            };
-            var data = new CompositionData
-            {
-                Attribute = WCA_ACCENT_POLICY,
-                Data = Marshal.AllocHGlobal(Marshal.SizeOf<AccentPolicy>()),
-                Size = Marshal.SizeOf<AccentPolicy>(),
-            };
-            try
-            {
-                Marshal.StructureToPtr(accent, data.Data, false);
-                SetWindowCompositionAttribute(handle, ref data);
-            }
-            finally
-            {
-                Marshal.FreeHGlobal(data.Data);
-            }
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct Margins
-        {
-            public int Left;
-            public int Right;
-            public int Top;
-            public int Bottom;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct AccentPolicy
-        {
-            public int AccentState;
-            public int AccentFlags;
-            public int GradientColor;
-            public int AnimationId;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct CompositionData
-        {
-            public int Attribute;
-            public IntPtr Data;
-            public int Size;
-        }
-
-        [DllImport("dwmapi.dll")]
-        private static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);
-
-        [DllImport("dwmapi.dll")]
-        private static extern int DwmExtendFrameIntoClientArea(IntPtr window, ref Margins margins);
-
-        [DllImport("user32.dll")]
-        private static extern int SetWindowCompositionAttribute(IntPtr window, ref CompositionData data);
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
     }
+
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr window, out NativeRect rect);
+
+    private void EnableLayered()
+    {
+        var style = GetWindowLong(Handle, -20);
+        SetWindowLong(Handle, -20, style | 0x80000 | 0x80);
+    }
+
+    private void UpdateLayered(Bitmap bitmap)
+    {
+        var screen = GetDC(IntPtr.Zero);
+        var memory = CreateCompatibleDC(screen);
+        var hBitmap = bitmap.GetHbitmap(Color.FromArgb(0));
+        var previous = SelectObject(memory, hBitmap);
+        try
+        {
+            var destination = PointToScreen(Point.Empty);
+            var source = Point.Empty;
+            var size = new Size(bitmap.Width, bitmap.Height);
+            var blend = new BlendFunction
+            {
+                BlendOp = 0,
+                BlendFlags = 0,
+                SourceConstantAlpha = 255,
+                AlphaFormat = 1,
+            };
+            UpdateLayeredWindow(Handle, screen, ref destination, ref size, memory, ref source, 0, ref blend, 2);
+        }
+        finally
+        {
+            SelectObject(memory, previous);
+            DeleteObject(hBitmap);
+            DeleteDC(memory);
+            ReleaseDC(IntPtr.Zero, screen);
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BlendFunction
+    {
+        public byte BlendOp;
+        public byte BlendFlags;
+        public byte SourceConstantAlpha;
+        public byte AlphaFormat;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetDC(IntPtr window);
+
+    [DllImport("user32.dll")]
+    private static extern int ReleaseDC(IntPtr window, IntPtr dc);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateCompatibleDC(IntPtr dc);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool DeleteDC(IntPtr dc);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr SelectObject(IntPtr dc, IntPtr value);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool DeleteObject(IntPtr value);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int GetWindowLong(IntPtr window, int index);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int SetWindowLong(IntPtr window, int index, int value);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool UpdateLayeredWindow(
+        IntPtr window,
+        IntPtr destinationDc,
+        ref Point destination,
+        ref Size size,
+        IntPtr sourceDc,
+        ref Point source,
+        int colorKey,
+        ref BlendFunction blend,
+        int flags);
 }

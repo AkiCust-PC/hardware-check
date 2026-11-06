@@ -521,7 +521,6 @@ internal sealed class MainForm : Form
             Margin = new Padding(0, 0, Ui.SPACING, Ui.SPACING),
             Padding = new Padding(Ui.SPACING / 2),
             BackColor = SystemColors.Window,
-            BorderStyle = BorderStyle.FixedSingle,
             CellBorderStyle = TableLayoutPanelCellBorderStyle.None,
         };
         card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
