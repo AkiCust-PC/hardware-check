@@ -373,6 +373,7 @@
   "settings.tests": "テスト",
   "settings.crosshair": "クロスヘア",
   "crosshair.toggle": "クロスヘア",
+  "ruler.toggle": "画面定規",
   "crosshair.enable": "クロスヘアを有効化",
   "crosshair.settings": "クロスヘア設定",
   "crosshair.shape": "形状",

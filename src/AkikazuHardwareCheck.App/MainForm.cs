@@ -140,6 +140,7 @@ internal sealed class MainForm : Form
     private LiveChartForm? _chartForm;
     private FloatingPerformanceForm? _floatingForm;
     private CrosshairOverlayForm? _crosshairForm;
+    private ScreenRulerOverlay? _rulerOverlay;
     private TestWorkspaceForm? _testWorkspace;
     private bool _testWorkspaceRestoring;
     private HardwareWindowForm? _hardwareWindow;
@@ -191,6 +192,7 @@ internal sealed class MainForm : Form
         base.OnShown(e);
         ApplyBodyWidths();
         UpdateCrosshair();
+        UpdateRuler();
         if (_startHidden && _settings is { ShowTrayIcon: true, CloseToTray: true })
         {
             HideToTray();
@@ -293,6 +295,8 @@ internal sealed class MainForm : Form
         _floatingForm = null;
         _crosshairForm?.Dispose();
         _crosshairForm = null;
+        _rulerOverlay?.Dispose();
+        _rulerOverlay = null;
         _activityMonitor?.Dispose();
         _sensorSource?.Dispose();
         if (_isDriverOurs)
@@ -788,6 +792,7 @@ internal sealed class MainForm : Form
         }
         NativeMenu.AddSeparator(tools);
         NativeMenu.AddItem(tools, MenuCommand.Crosshair, _t["crosshair.toggle"]);
+        NativeMenu.AddItem(tools, MenuCommand.ScreenRuler, _t["ruler.toggle"]);
         NativeMenu.AddItem(tools, MenuCommand.TestWindow, _t["ui.testWindow"]);
         NativeMenu.AddItem(tools, MenuCommand.HardwareWindow, _t["ui.hardwareWindow"]);
 
@@ -900,6 +905,9 @@ internal sealed class MainForm : Form
                 break;
             case MenuCommand.Crosshair:
                 ToggleCrosshair();
+                break;
+            case MenuCommand.ScreenRuler:
+                ToggleRuler();
                 break;
             case MenuCommand.TestWindow:
                 ShowTestWorkspace();
@@ -1585,6 +1593,32 @@ internal sealed class MainForm : Form
         UpdateCommandStates();
     }
 
+    private void ToggleRuler()
+    {
+        SaveSettings(_settings with { RulerEnabled = !_settings.RulerEnabled });
+        UpdateRuler();
+        UpdateCommandStates();
+    }
+
+    private void UpdateRuler()
+    {
+        if (!_settings.RulerEnabled)
+        {
+            _rulerOverlay?.Dispose();
+            _rulerOverlay = null;
+            return;
+        }
+
+        if (_rulerOverlay is { IsDisposed: false })
+        {
+            return;
+        }
+
+        _rulerOverlay = new ScreenRulerOverlay();
+        _rulerOverlay.FormClosed += (_, _) => _rulerOverlay = null;
+        _rulerOverlay.Show();
+    }
+
     private void UpdateCrosshair()
     {
         if (!_settings.CrosshairEnabled)
@@ -2210,6 +2244,7 @@ internal sealed class MainForm : Form
             menu.SetChecked(MenuCommand.ShowHardware, !_settings.IsHardwarePanelHidden);
             menu.SetChecked(MenuCommand.ShowMonitor, !_settings.IsMonitorPanelHidden);
             menu.SetChecked(MenuCommand.Crosshair, _settings.CrosshairEnabled);
+            menu.SetChecked(MenuCommand.ScreenRuler, _settings.RulerEnabled);
             menu.SetEnabled(MenuCommand.RestartToFirmware, !isRunning);
             for (var index = 0; index < LanguageChoices.Length; index++)
             {

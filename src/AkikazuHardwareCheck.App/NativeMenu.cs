@@ -25,6 +25,7 @@ internal enum MenuCommand
     ShowTests,
     Floating,
     Crosshair,
+    ScreenRuler,
     TestWindow,
     HardwareWindow,
     Guide,

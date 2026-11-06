@@ -373,6 +373,7 @@
   "settings.tests": "測試",
   "settings.crosshair": "準星",
   "crosshair.toggle": "準星",
+  "ruler.toggle": "螢幕標尺",
   "crosshair.enable": "啟用準星",
   "crosshair.settings": "準星設定",
   "crosshair.shape": "形狀",
